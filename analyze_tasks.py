@@ -162,7 +162,7 @@ def collect_weekly_analyses() -> tuple[str, Path]:
 
     # Create output path for weekly analysis
     week_label = week_start.strftime("%Y%m%d")
-    output_path = weekly_dir / f"{week_label}.weekly_analysis.txt"
+    output_path = weekly_dir / f"{week_label}.week.txt"
 
     return combined_text, output_path
 
@@ -245,7 +245,7 @@ def main():
             print(f"Collecting daily analyses for weekly review...\n")
         else:
             task_notes, notes_path = load_task_notes(args.type)
-            print(f"Analyzing: {notes_path.name}\n")
+            print(f"Analyzingdaily tasks: {notes_path.name}\n")
 
         result = analyze_tasks(system_prompt, task_notes)
 
