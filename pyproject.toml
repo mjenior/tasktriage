@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tasker"
+version = "0.1.0"
+description = "Analyzes daily task notes using Claude via LangChain and generates an actionable execution plan based on GTD principles."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "langchain-anthropic>=0.3.0",
+    "langchain-core>=0.3.0",
+]
+
+[project.scripts]
+analyze-tasks = "analyze_tasks:main"
