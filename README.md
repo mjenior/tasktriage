@@ -1,10 +1,10 @@
 # Tasker
 
-A CLI tool that analyzes daily task notes using Claude AI and generates actionable execution plans based on GTD (Getting Things Done) principles.
+A CLI tool that analyzes handwritten task notes from a note-taking device using Claude AI to generate actionable GTD-based execution plans.
 
 ## Overview
 
-Tasker automates the process of turning raw daily task notes into structured, prioritized execution plans. It uses Claude AI via LangChain to:
+Tasker bridges the gap between handwritten task capture and digital execution planning. Notes written on a note-taking device (e.g., reMarkable, Supernote) are synced to a mounted drive, where Tasker automatically detects and analyzes them using Claude AI via LangChain to:
 
 - **Daily Analysis**: Transform categorized to-do lists into realistic single-day execution plans with time estimates, energy levels, and prioritized action steps
 - **Weekly Analysis**: Aggregate daily analyses to identify patterns, diagnose execution breakdowns, and generate corrective planning strategies
@@ -69,7 +69,9 @@ top_p: 1.0
 
 ### Notes Directory
 
-By default, Tasker looks for notes in `/media/matt-jenior/MJENIOR/Notes` (configurable in `analyze_tasks.py`). The expected directory structure is:
+Tasker reads notes from a mounted note-taking device. By default, it looks for notes in `/media/matt-jenior/MJENIOR/Notes` (configurable in `analyze_tasks.py`). Ensure your device is connected and mounted before running analysis.
+
+The expected directory structure is:
 
 ```
 Notes/
