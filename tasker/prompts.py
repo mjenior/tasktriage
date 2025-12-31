@@ -20,7 +20,8 @@ Transform the provided categorized to-do list into a single-day execution plan t
 The input is a handwritten task list with the following structure:
 
 - **Category headers**: Each group of tasks is preceded by a category name (e.g., "Work", "Home", "Personal"). Use these headers to determine whether tasks are work-related or home/personal tasks.
-- **Task markers** (appear to the left of each task):
+- **Tasks**: Listed as a different task per line indented below each category header
+- **Task markers** (appear to the right of each task):
   - `✓` (checkmark) = Task already completed
   - `X` = Task removed or abandoned
   - `*` (asterisk) = Urgent/non-negotiable task (highest priority)

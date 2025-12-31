@@ -39,6 +39,30 @@ tasks:
     status:
       - test -d .venv
 
+  setup:env:
+    desc: Create .env file from template
+    cmds:
+      - cp .env.template .env
+      - |
+        echo "Created .env file. Please edit it with your settings:"
+        echo "  - ANTHROPIC_API_KEY: Your Anthropic API key"
+        echo "  - NOTES_DIR: Path to your notes directory"
+    status:
+      - test -f .env
+
+  setup:
+    desc: Full first-time setup (venv, install, env file)
+    cmds:
+      - task: venv
+      - task: install
+      - task: setup:env
+      - |
+        echo ""
+        echo "Setup complete! Next steps:"
+        echo "  1. Edit .env with your API key and notes directory"
+        echo "  2. Run 'source .venv/bin/activate' to activate the virtual environment"
+        echo "  3. Run 'task aliases' to add shell shortcuts (optional)"
+
   test:
     desc: Run tests
     deps: [install]

@@ -29,11 +29,14 @@ Tasker bridges the gap between handwritten task capture and digital execution pl
 ### Using Task and uv (recommended)
 
 ```bash
-# Create virtual environment
-task venv
+# Full first-time setup (creates venv, installs deps, copies .env template)
+task setup
 
-# Install dependencies
-task install
+# Edit .env with your API key and notes directory
+nano .env  # or your preferred editor
+
+# Activate the virtual environment
+source .venv/bin/activate
 
 # Add shell aliases (optional)
 task aliases
@@ -44,6 +47,8 @@ source ~/.bashrc  # or ~/.zshrc
 
 ```bash
 pip install -e .
+cp .env.template .env
+# Edit .env with your settings
 ```
 
 ## Configuration
@@ -168,6 +173,8 @@ The weekly analysis includes:
 ## Task Commands
 
 ```bash
+task setup          # Full first-time setup (venv + install + env)
+task setup:env      # Create .env file from template
 task install        # Install dependencies with uv
 task venv           # Create virtual environment
 task sync           # Sync dependencies from lock file
