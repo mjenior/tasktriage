@@ -227,6 +227,25 @@ def _save_analysis_usb(analysis: str, input_path: Path, notes_type: str = "daily
 # Google Drive Functions
 # =============================================================================
 
+def _analysis_exists_locally(notes_type: str, analysis_filename: str) -> bool:
+    """Check if an analysis file exists in the local output directory.
+
+    Args:
+        notes_type: Type of notes ("daily" or "weekly")
+        analysis_filename: Name of the analysis file to check
+
+    Returns:
+        True if the analysis file exists locally
+    """
+    from .config import ANALYSIS_OUTPUT_DIR
+
+    if not ANALYSIS_OUTPUT_DIR:
+        return False
+
+    analysis_path = Path(ANALYSIS_OUTPUT_DIR) / notes_type / analysis_filename
+    return analysis_path.exists()
+
+
 def _load_task_notes_gdrive(notes_type: str = "daily") -> tuple[str, Path, datetime]:
     """Load task notes from Google Drive.
 
@@ -236,6 +255,7 @@ def _load_task_notes_gdrive(notes_type: str = "daily") -> tuple[str, Path, datet
     Returns:
         Tuple of (file contents, virtual path, parsed datetime from filename)
     """
+    from .config import ANALYSIS_OUTPUT_DIR
     from .gdrive import (
         GoogleDriveClient,
         IMAGE_MIME_TYPES,
@@ -272,7 +292,12 @@ def _load_task_notes_gdrive(notes_type: str = "daily") -> tuple[str, Path, datet
                 stem = stem.split(".")[0]
             analysis_filename = f"{stem}.{notes_type}_analysis.txt"
 
-        if client.file_exists(notes_type, analysis_filename):
+        # Check local output directory first (when ANALYSIS_OUTPUT_DIR is set)
+        if _analysis_exists_locally(notes_type, analysis_filename):
+            continue
+
+        # Fall back to checking Google Drive (for setups without local output)
+        if not ANALYSIS_OUTPUT_DIR and client.file_exists(notes_type, analysis_filename):
             continue
 
         # Download and process the file
@@ -359,7 +384,10 @@ def _collect_weekly_analyses_gdrive() -> tuple[str, Path, datetime, datetime]:
 
 
 def _save_analysis_gdrive(analysis: str, input_path: Path, notes_type: str = "daily") -> Path:
-    """Save analysis to Google Drive.
+    """Save analysis when source is Google Drive.
+
+    If ANALYSIS_OUTPUT_DIR is configured, saves locally to that directory.
+    Otherwise attempts to upload to Google Drive (requires proper quota/permissions).
 
     Args:
         analysis: The analysis content
@@ -367,11 +395,10 @@ def _save_analysis_gdrive(analysis: str, input_path: Path, notes_type: str = "da
         notes_type: Type of analysis
 
     Returns:
-        Virtual path to the saved analysis file
+        Path to the saved analysis file (local or virtual gdrive path)
     """
-    from .gdrive import GoogleDriveClient, extract_timestamp_from_filename
-
-    client = GoogleDriveClient()
+    from .config import ANALYSIS_OUTPUT_DIR
+    from .gdrive import extract_timestamp_from_filename
 
     # Extract filename from virtual path
     filename = input_path.name
@@ -397,6 +424,18 @@ def _save_analysis_gdrive(analysis: str, input_path: Path, notes_type: str = "da
     else:
         subfolder = "daily"
 
+    # If local output directory is configured, save there instead of GDrive
+    # (Service accounts don't have storage quota for uploads)
+    if ANALYSIS_OUTPUT_DIR:
+        output_dir = Path(ANALYSIS_OUTPUT_DIR) / subfolder
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / output_filename
+        output_path.write_text(formatted_output)
+        return output_path
+
+    # Otherwise, attempt to upload to Google Drive
+    from .gdrive import GoogleDriveClient
+    client = GoogleDriveClient()
     client.upload_file(subfolder, output_filename, formatted_output)
 
     return Path(f"gdrive://{subfolder}/{output_filename}")
@@ -455,7 +494,7 @@ def save_analysis(analysis: str, input_path: Path, notes_type: str = "daily") ->
     """Save the analysis output to a file.
 
     Automatically selects between USB and Google Drive based on the input path.
-    If input_path starts with "gdrive://", saves to Google Drive; otherwise saves locally.
+    If input_path starts with "gdrive:", saves to Google Drive; otherwise saves locally.
 
     Args:
         analysis: The analysis content from analyze_tasks
@@ -466,7 +505,9 @@ def save_analysis(analysis: str, input_path: Path, notes_type: str = "daily") ->
         Path to the saved analysis file
     """
     # Check if this is a Google Drive path
-    if str(input_path).startswith("gdrive://"):
+    # Note: Path normalizes "gdrive://" to "gdrive:/" so we check for "gdrive:"
+    path_str = str(input_path)
+    if path_str.startswith("gdrive:"):
         return _save_analysis_gdrive(analysis, input_path, notes_type)
     else:
         return _save_analysis_usb(analysis, input_path, notes_type)

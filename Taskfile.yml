@@ -46,9 +46,28 @@ tasks:
       - |
         echo "Created .env file. Please edit it with your settings:"
         echo "  - ANTHROPIC_API_KEY: Your Anthropic API key"
-        echo "  - NOTES_DIR: Path to your notes directory"
+        echo "  - USB_DIR or Google Drive settings for notes source"
+        echo "  - ANALYSIS_OUTPUT_DIR for saving analysis files (required for Google Drive)"
     status:
       - test -f .env
+
+  setup:output-dir:
+    desc: Create the analysis output directory from .env configuration
+    cmds:
+      - |
+        if [ -f .env ]; then
+          OUTPUT_DIR=$(grep -E "^ANALYSIS_OUTPUT_DIR=" .env | cut -d'=' -f2- | tr -d '"' | tr -d "'")
+          if [ -n "$OUTPUT_DIR" ]; then
+            mkdir -p "$OUTPUT_DIR/daily" "$OUTPUT_DIR/weekly"
+            echo "Created output directories:"
+            echo "  $OUTPUT_DIR/daily/"
+            echo "  $OUTPUT_DIR/weekly/"
+          else
+            echo "ANALYSIS_OUTPUT_DIR not set in .env - skipping directory creation"
+          fi
+        else
+          echo "No .env file found. Run 'task setup:env' first."
+        fi
 
   setup:
     desc: Full first-time setup (venv, install, env file)
@@ -59,9 +78,10 @@ tasks:
       - |
         echo ""
         echo "Setup complete! Next steps:"
-        echo "  1. Edit .env with your API key and notes directory"
+        echo "  1. Edit .env with your API key and notes source configuration"
         echo "  2. Run 'source .venv/bin/activate' to activate the virtual environment"
-        echo "  3. Run 'task aliases' to add shell shortcuts (optional)"
+        echo "  3. Run 'task setup:output-dir' to create the analysis output directory"
+        echo "  4. Run 'task aliases' to add shell shortcuts (optional)"
 
   test:
     desc: Run tests

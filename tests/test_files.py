@@ -331,6 +331,25 @@ class TestSaveAnalysis:
             mock_client.upload_file.assert_called_once()
             assert "gdrive:" in str(output_path)
 
+    def test_save_analysis_routes_to_gdrive_with_normalized_path(self):
+        """Should route to gdrive save when path is normalized (gdrive:/ not gdrive://)."""
+        mock_client = MagicMock()
+
+        with patch("tasker.gdrive.GoogleDriveClient", return_value=mock_client):
+            from tasker.files import save_analysis
+
+            # Path normalizes gdrive:// to gdrive:/ - this should still route to gdrive
+            virtual_path = Path("gdrive://daily/20251231_143000.txt")
+            # Verify the path was normalized
+            assert str(virtual_path).startswith("gdrive:/")
+            assert not str(virtual_path).startswith("gdrive://")
+
+            output_path = save_analysis("Analysis content", virtual_path, "daily")
+
+            # Should have called gdrive upload, not tried to write locally
+            mock_client.upload_file.assert_called_once()
+            assert "gdrive:" in str(output_path)
+
     def test_saves_analysis_with_page_identifier_usb(self, mock_usb_dir):
         """Should save analysis using timestamp only, not page identifier, for USB."""
         daily_dir = mock_usb_dir / "daily"

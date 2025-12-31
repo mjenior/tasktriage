@@ -165,24 +165,56 @@ GOOGLE_CREDENTIALS_PATH=/path/to/credentials.json
 # Google Drive folder ID
 GOOGLE_DRIVE_FOLDER_ID=your-folder-id-here
 
+# Local directory to save analysis output (REQUIRED for service accounts)
+# Service accounts don't have storage quota to upload files to Google Drive,
+# so analysis files must be saved locally
+ANALYSIS_OUTPUT_DIR=/path/to/analysis/output
+
 # Optional: Force Google Drive as the source
 NOTES_SOURCE=gdrive
 ```
 
+### 8. Create the Output Directory
+
+After configuring your `.env` file, create the output directory:
+
+```bash
+task setup:output-dir
+```
+
+This creates the `daily/` and `weekly/` subdirectories in your `ANALYSIS_OUTPUT_DIR`.
+
+### Important: Service Account Limitations
+
+Google Drive service accounts **cannot upload files** because they don't have storage quota. Tasker uses a hybrid approach:
+
+- **Reads** notes from Google Drive (works with service account)
+- **Saves** analysis files locally to `ANALYSIS_OUTPUT_DIR`
+
+This is why `ANALYSIS_OUTPUT_DIR` is required when using Google Drive as your notes source.
+
 ### Google Drive Folder Structure
 
-Your Google Drive folder should have this structure:
+Your Google Drive folder should have this structure (notes only, no analysis files):
 
 ```
 TaskerNotes/                          # Folder ID goes in GOOGLE_DRIVE_FOLDER_ID
 ├── daily/
 │   ├── 20251225_074353.txt           # Raw daily notes (text)
 │   ├── 20251225_074353.png           # Raw daily notes (image)
-│   ├── 20251225_074353.daily_analysis.txt  # Generated analysis
 │   └── ...
 └── weekly/
-    ├── 20251223.weekly_analysis.txt  # Generated weekly analysis
     └── ...
+```
+
+Analysis files are saved locally:
+
+```
+ANALYSIS_OUTPUT_DIR/
+├── daily/
+│   └── 20251225_074353.daily_analysis.txt  # Generated analysis
+└── weekly/
+    └── 20251223.weekly_analysis.txt        # Generated weekly analysis
 ```
 
 ## Notes Directory Structure
@@ -283,17 +315,18 @@ The weekly analysis includes:
 ## Task Commands
 
 ```bash
-task setup          # Full first-time setup (venv + install + env)
-task setup:env      # Create .env file from template
-task install        # Install dependencies with uv
-task venv           # Create virtual environment
-task sync           # Sync dependencies from lock file
-task lock           # Update the lock file
-task test           # Run tests
-task aliases        # Add daily/weekly shell aliases
-task aliases:remove # Remove shell aliases
-task clean          # Remove build artifacts
-task clean:all      # Remove all generated files including venv
+task setup            # Full first-time setup (venv + install + env)
+task setup:env        # Create .env file from template
+task setup:output-dir # Create analysis output directory (for Google Drive users)
+task install          # Install dependencies with uv
+task venv             # Create virtual environment
+task sync             # Sync dependencies from lock file
+task lock             # Update the lock file
+task test             # Run tests
+task aliases          # Add daily/weekly shell aliases
+task aliases:remove   # Remove shell aliases
+task clean            # Remove build artifacts
+task clean:all        # Remove all generated files including venv
 ```
 
 ## Testing

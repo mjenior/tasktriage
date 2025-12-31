@@ -20,6 +20,10 @@ USB_DIR = os.getenv("USB_DIR")
 GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_PATH")
 GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
 
+# Local directory to save analysis output (used when GDrive can't upload due to quota)
+# If set, analysis files will be saved here instead of uploading to Google Drive
+ANALYSIS_OUTPUT_DIR = os.getenv("ANALYSIS_OUTPUT_DIR")
+
 # Validate that at least one source is configured
 if not USB_DIR and not (GOOGLE_CREDENTIALS_PATH and GOOGLE_DRIVE_FOLDER_ID):
     raise ValueError(

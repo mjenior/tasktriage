@@ -14,8 +14,8 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-# Google Drive API scopes (read-only access)
-SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
+# Google Drive API scopes (read and write access for uploading analysis files)
+SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 # Supported MIME types for notes files
 TEXT_MIME_TYPES = {"text/plain"}
