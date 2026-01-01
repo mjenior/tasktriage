@@ -236,7 +236,7 @@ LOCAL_OUTPUT_DIR/
 Whether you're using USB or Google Drive, TaskTriage expects this structure:
 
 ```
-Notes/
+notes/
 ├── daily/
 │   ├── 20251225_074353.txt              # Raw daily notes (text)
 │   ├── 20251226_083000.png              # Raw daily notes (image)
