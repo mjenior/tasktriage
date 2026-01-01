@@ -9,7 +9,7 @@ import argparse
 import sys
 
 from .analysis import analyze_tasks
-from .files import load_task_notes, collect_weekly_analyses, save_analysis
+from .files import load_task_notes, collect_weekly_analyses, save_analysis, get_notes_source
 from .image import IMAGE_EXTENSIONS
 
 
@@ -28,6 +28,11 @@ def main():
     args = parser.parse_args()
 
     try:
+        # Show which notes source is being used
+        source = get_notes_source()
+        source_label = "Google Drive" if source == "gdrive" else "USB/Local"
+        print(f"Using notes source: {source_label}\n")
+
         if args.type == "weekly":
             # Collect previous week's daily analyses
             task_notes, notes_path, week_start, week_end = collect_weekly_analyses()

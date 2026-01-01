@@ -14,16 +14,10 @@ from .config import fetch_api_key, load_model_config, DEFAULT_MODEL
 from .prompts import IMAGE_EXTRACTION_PROMPT
 
 # Supported image file extensions
-IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+IMAGE_EXTENSIONS = {".png"}
 
 # Mapping of file extensions to MIME types
-MEDIA_TYPE_MAP = {
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".gif": "image/gif",
-    ".webp": "image/webp",
-}
+MEDIA_TYPE_MAP = {".png": "image/png"}
 
 
 def extract_text_from_image(image_path: Path, api_key: str | None = None) -> str:

@@ -3,6 +3,8 @@ Tasker - Daily Task Analyzer
 
 Analyzes daily task notes using Claude via LangChain and generates
 actionable execution plans based on GTD principles.
+
+Supports reading notes from both local/USB directories and Google Drive.
 """
 
 # Configuration
@@ -12,6 +14,12 @@ from .config import (
     USB_DIR,
     CONFIG_PATH,
     DEFAULT_MODEL,
+    GOOGLE_CREDENTIALS_PATH,
+    GOOGLE_DRIVE_FOLDER_ID,
+    NOTES_SOURCE,
+    is_usb_available,
+    is_gdrive_available,
+    get_active_source,
 )
 
 # Prompt templates
@@ -37,8 +45,15 @@ from .files import (
     load_task_notes,
     collect_weekly_analyses,
     save_analysis,
+    get_notes_source,
     TEXT_EXTENSIONS,
     ALL_EXTENSIONS,
+)
+
+# Google Drive integration
+from .gdrive import (
+    GoogleDriveClient,
+    is_gdrive_configured,
 )
 
 # Core analysis
@@ -58,12 +73,22 @@ __all__ = [
     "collect_weekly_analyses",
     "save_analysis",
     "extract_text_from_image",
+    "get_notes_source",
+    # Google Drive
+    "GoogleDriveClient",
+    "is_gdrive_configured",
     # Configuration
     "fetch_api_key",
     "load_model_config",
     "USB_DIR",
     "CONFIG_PATH",
     "DEFAULT_MODEL",
+    "GOOGLE_CREDENTIALS_PATH",
+    "GOOGLE_DRIVE_FOLDER_ID",
+    "NOTES_SOURCE",
+    "is_usb_available",
+    "is_gdrive_available",
+    "get_active_source",
     # Prompt templates
     "get_daily_prompt",
     "get_weekly_prompt",

@@ -32,7 +32,7 @@ Assume all tasks without completion markers (✓ or X) are intended for today un
 
 ## Output Format
 
-Produce a numbered list called "Daily Execution Order" with the following structure for each task:
+Produce a numbered list with the header "# Daily Execution Order — {current_date}" (include the current date in the header) with the following structure for each task:
 
 ```
 1. **Task Name** [Energy: High/Medium/Low] [Est: XXmin] [Today Portion]
@@ -47,12 +47,13 @@ Labels to include when applicable:
 
 After the execution order, include:
 1. **Deferred Tasks** — Any tasks moved to Later with brief justification
-2. **Critical Assessment** — 3–4 sentences evaluating the original task list
+2. **Completed Tasks Review** — Analysis of tasks already marked complete (✓)
+3. **Critical Assessment** — 3–4 sentences evaluating the original task list
 
 ### Example Output
 
 ```
-# Daily Execution Order
+# Daily Execution Order — Monday, December 30, 2024
 
 1. **Review Q4 budget proposal** [Energy: High] [Est: 45min]
    - Open budget spreadsheet and identify top 3 discrepancies
@@ -74,6 +75,23 @@ After the execution order, include:
 ## Deferred Tasks
 
 - **Reorganize garage** [Later Portion]: Full task requires 4+ hours; today's portion not feasible given workload.
+
+---
+
+## Completed Tasks Review
+
+**Tasks completed before planning (3 total):**
+
+1. **Morning workout** [Energy: Medium] [Est: 45min]
+   - Consistent daily habit—well executed
+
+2. **Submit expense report** [Energy: Low] [Est: 15min]
+   - Quick administrative win; good to batch with other low-energy tasks
+
+3. **Call dentist to reschedule** [Energy: Low] [Est: 10min]
+   - Cleared a lingering task; prevented future mental overhead
+
+**Observations:** Strong start to the day with 70 minutes of completed work before planning. The mix of a medium-energy habit task followed by low-energy administrative tasks shows good instinct for front-loading completion. Consider protecting this early morning execution window.
 
 ---
 
@@ -130,7 +148,20 @@ If total exceeds this range:
 - Defer lowest-impact non-urgent tasks
 - Use practical judgment—don't over-optimize
 
-### Step 6: Write Critical Assessment
+### Step 6: Analyze Completed Tasks
+
+For tasks marked with ✓ (checkmark):
+- List each completed task with estimated energy level and time
+- Add a brief note on execution quality or strategic value
+- Write 2–3 sentences of observations covering:
+  - Total time already invested today
+  - Patterns in what gets done early (habits, quick wins, avoidance of hard tasks)
+  - Whether completed tasks align with stated priorities
+  - Suggestions for protecting productive patterns or addressing problematic ones
+
+Do not skip this section even if few tasks are completed—note if the day is starting fresh.
+
+### Step 7: Write Critical Assessment
 
 In 3–4 sentences:
 - Evaluate clarity and realism of the original entries
@@ -175,9 +206,10 @@ You will receive 5–7 daily execution plans, each containing:
   - `*` = Originally marked urgent
 - **Split labels**: `[Today Portion]` and `[Later Portion]` for oversized tasks
 - **Deferred Tasks section**: Tasks moved to later dates
+- **Completed Tasks Review**: Analysis of tasks already completed before planning, including observations about early execution patterns
 - **Critical Assessment**: Observations about that day's planning
 
-Each plan represents both the intended execution and (via ✓/X markers) the actual outcome.
+Each plan represents both the intended execution and (via ✓/X markers) the actual outcome. The Completed Tasks Review provides insight into what actually gets done early in the day.
 
 ## Output Format
 
@@ -211,6 +243,7 @@ Identify across the full week:
 - Tasks deferred multiple times (priority mismatches)
 - Tasks repeatedly removed after deferral (planning failures)
 - High-priority tasks left unfinished vs. low-impact tasks completed
+- Early completion patterns from Completed Tasks Reviews (what gets done before planning)
 - Any notable wins or improvements worth reinforcing
 
 Present as 3–5 concise bullet points focused on patterns, not isolated incidents.
@@ -251,6 +284,7 @@ Provide practical guidance including:
 - **Day typing**: Suggest which days should be Heavy (4+ hours deep work), Medium, or Light
 - **Admission criteria**: What qualifies as a legitimate daily task vs. what belongs on a project list
 - **Pre-splitting guidance**: Which known large tasks should be split before they hit the daily list
+- **Early execution leverage**: Based on Completed Tasks Reviews, identify optimal morning routines and task types that succeed before formal planning begins
 
 Ground all recommendations in this week's actual behavior, not aspirational ideals.
 
