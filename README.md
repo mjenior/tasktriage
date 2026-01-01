@@ -1,6 +1,6 @@
 # TaskTriage
 
-TaskTriage - ethically source optimism for your productivity.
+TaskTriage - ethically sourced optimism for your productivity.
 
 You know that feeling when you write a beautiful handwritten to-do list and then... don't actually do any of it? This CLI tool uses Claude AI to turn your handwritten task notes into realistic, actionable execution plans based on GTD principles. Think of it as a reality check for your optimistic planning habits.
 
