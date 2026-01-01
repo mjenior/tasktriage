@@ -92,20 +92,20 @@ tasks:
   aliases:
     desc: Add daily/weekly alias commands to shell config
     preconditions:
-      - sh: 'grep -q "# Tasker aliases" "{{.SHELL_RC}}" 2>/dev/null && exit 1 || exit 0'
+      - sh: 'grep -q "# TaskTriage aliases" "{{.SHELL_RC}}" 2>/dev/null && exit 1 || exit 0'
         msg: "Aliases already exist in {{.SHELL_RC}}. Run 'task aliases:remove' first to update."
     cmds:
       - echo "" >> "{{.SHELL_RC}}"
-      - echo "# Tasker aliases" >> "{{.SHELL_RC}}"
-      - echo "alias daily='analyze-tasks --type daily'" >> "{{.SHELL_RC}}"
-      - echo "alias weekly='analyze-tasks --type weekly'" >> "{{.SHELL_RC}}"
+      - echo "# TaskTriage aliases" >> "{{.SHELL_RC}}"
+      - echo "alias daily='task-triage --type daily'" >> "{{.SHELL_RC}}"
+      - echo "alias weekly='task-triage --type weekly'" >> "{{.SHELL_RC}}"
       - echo "Aliases added to {{.SHELL_RC}}"
       - echo "Run 'source {{.SHELL_RC}}' or restart your terminal to use them."
 
   aliases:remove:
     desc: Remove aliases from shell config
     cmds:
-      - sed -i '/# Tasker aliases/,/^alias weekly=/d' "{{.SHELL_RC}}"
+      - sed -i '/# TaskTriage aliases/,/^alias weekly=/d' "{{.SHELL_RC}}"
       - echo "Aliases removed from {{.SHELL_RC}}"
 
   clean:

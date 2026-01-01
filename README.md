@@ -1,35 +1,38 @@
-# Tasker
+# TaskTriage
 
-A CLI tool that analyzes handwritten task notes from a note-taking device using Claude AI to generate actionable GTD-based execution plans.
+TaskTriage - ethically source optimism for your productivity.
+
+You know that feeling when you write a beautiful handwritten to-do list and then... don't actually do any of it? This CLI tool uses Claude AI to turn your handwritten task notes into realistic, actionable execution plans based on GTD principles. Think of it as a reality check for your optimistic planning habits.
 
 ## Overview
 
-Tasker bridges the gap between handwritten task capture and digital execution planning. Notes written on a note-taking device (e.g., reMarkable, Supernote) are synced to a mounted drive or Google Drive, where Tasker automatically detects and analyzes them using Claude AI via LangChain to:
+Here's the deal: you write your tasks on a fancy note-taking device (reMarkable, Supernote). Those notes get synced to either a mounted drive or Google Drive. TaskTriage then swoops in, finds your latest scribbles, and uses Claude AI (via LangChain) to do two things:
 
-- **Daily Analysis**: Transform categorized to-do lists into realistic single-day execution plans with time estimates, energy levels, and prioritized action steps
-- **Weekly Analysis**: Aggregate daily analyses to identify patterns, diagnose execution breakdowns, and generate corrective planning strategies
+- **Daily Analysis**: Takes your categorized to-do list and transforms it into an actual realistic plan for a single day. You get time estimates, energy levels, and prioritized action steps. No more pretending you can do 47 things in one afternoon.
+- **Weekly Analysis**: Looks back at your week's worth of daily plans to spot patterns, figure out where things went sideways, and generate strategies to fix your planning approach. It's like a retrospective, but with less corporate speak.
 
 ## Features
 
-- Automatic detection of the most recent unanalyzed notes file
-- Support for both text files (.txt) and images (.png, .jpg, .jpeg, .gif, .webp)
-- Automatic text extraction from handwritten note images using Claude's vision API
-- Dual storage support: local/USB directories and Google Drive
-- Configurable Claude model parameters via YAML
-- GTD-based prioritization with workload guardrails (6-7 hours/day)
-- Weekly rollup analysis of daily execution patterns
-- Shell aliases for quick access
+- Automatically finds the most recent notes file you haven't analyzed yet (because who wants to manually track that?)
+- Handles both text files (.txt) and images (.png, .jpg, .jpeg, .gif, .webp)
+- Extracts text from your handwritten notes using Claude's vision API—yes, even your terrible handwriting
+- Works with local/USB directories or Google Drive (your choice)
+- Tweak Claude's model parameters via a simple YAML file
+- GTD-based prioritization with built-in workload guardrails that cap you at 6-7 hours of focused work per day (because burnout is bad, actually)
+- Weekly rollup analysis that shows you where your planning keeps falling apart
+- Shell aliases so you can just type `daily` or `weekly` instead of the full command
 
 ## Requirements
 
-- Python 3.10+
-- [uv](https://github.com/astral-sh/uv) (recommended) or pip
-- [Task](https://taskfile.dev/) (optional, for task automation)
-- Anthropic API key
+You'll need:
+- Python 3.10 or newer
+- [uv](https://github.com/astral-sh/uv) (recommended) or plain old pip
+- [Task](https://taskfile.dev/) (optional but makes your life easier)
+- An Anthropic API key (this is where Claude lives)
 
 ## Installation
 
-### Using Task and uv (recommended)
+### Using Task and uv (the easy way)
 
 ```bash
 # Full first-time setup (creates venv, installs deps, copies .env template)
@@ -41,12 +44,14 @@ nano .env  # or your preferred editor
 # Activate the virtual environment
 source .venv/bin/activate
 
-# Add shell aliases (optional)
+# Add shell aliases (optional but highly recommended)
 task aliases
-source ~/.bashrc  # or ~/.zshrc
+source ~/.bashrc  # or ~/.zshrc if you're a zsh person
 ```
 
-### Using pip
+### Using pip (the manual way)
+
+If you really want to do it yourself:
 
 ```bash
 pip install -e .
@@ -58,7 +63,7 @@ cp .env.template .env
 
 ### Environment Variables
 
-Copy the `.env.template` file to `.env` and configure your settings:
+First things first: copy the `.env.template` file to `.env` and fill in your details.
 
 ```bash
 cp .env.template .env
@@ -66,11 +71,11 @@ cp .env.template .env
 
 ### Notes Source Configuration
 
-Tasker supports two storage backends. Configure at least one:
+TaskTriage can read your notes from two places. Pick at least one:
 
 #### Option 1: USB/Local Directory
 
-For notes synced to a local directory (e.g., via USB from a reMarkable or Supernote):
+If you're syncing notes to a local directory (like via USB from your reMarkable or Supernote):
 
 ```bash
 # Path to the mounted note-taking device directory
@@ -79,11 +84,11 @@ USB_DIR=/path/to/your/notes/directory
 
 #### Option 2: Google Drive
 
-For notes synced to Google Drive, see [Google Drive Setup](#google-drive-setup) below.
+If your notes live in Google Drive, check out the [Google Drive Setup](#google-drive-setup) section below. Fair warning: it's a bit involved.
 
 #### Source Selection
 
-By default, Tasker uses "auto" mode which prefers USB if available, falling back to Google Drive. You can override this:
+By default, TaskTriage is set to "auto" mode—it looks for USB first, then falls back to Google Drive if USB isn't available. You can force a specific source if you want:
 
 ```bash
 # Options: auto, usb, gdrive
@@ -92,14 +97,15 @@ NOTES_SOURCE=auto
 
 ### Anthropic API Key
 
+You'll need an API key from Anthropic. Get one at https://console.anthropic.com/ and drop it in:
+
 ```bash
-# Get your API key from: https://console.anthropic.com/
 ANTHROPIC_API_KEY=your-api-key-here
 ```
 
 ### Model Configuration
 
-Edit `config.yaml` to customize Claude model parameters:
+Want to tweak how Claude thinks? Edit `config.yaml`:
 
 ```yaml
 model: claude-3-5-haiku-20241022
@@ -110,53 +116,61 @@ top_p: 1.0
 
 ## Google Drive Setup
 
-To use Google Drive as your notes source, follow these steps:
+Alright, buckle up. Setting up Google Drive is... not simple. Google's service account setup is designed for enterprise deployments, not cute little task analysis tools. But it works, so here we go.
 
 ### 1. Create a Google Cloud Project
 
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+1. Head to the [Google Cloud Console](https://console.cloud.google.com/)
 2. Click "Select a project" → "New Project"
-3. Enter a project name (e.g., "Tasker") and click "Create"
+3. Name it something like "TaskTriage" and click "Create"
 
 ### 2. Enable the Google Drive API
 
-1. In your project, go to "APIs & Services" → "Library"
+1. In your shiny new project, navigate to "APIs & Services" → "Library"
 2. Search for "Google Drive API"
-3. Click on it and press "Enable"
+3. Click on it and mash that "Enable" button
 
 ### 3. Create a Service Account
 
+This is basically a robot user that will access your Drive for you.
+
 1. Go to "APIs & Services" → "Credentials"
 2. Click "Create Credentials" → "Service account"
-3. Enter a name (e.g., "tasker-service-account") and click "Create"
-4. Skip the optional steps and click "Done"
+3. Give it a name like "tasktriage-service-account" and click "Create"
+4. Skip the optional permission steps (you don't need them) and click "Done"
 
 ### 4. Generate Service Account Key
+
+Now you need to download credentials for your robot:
 
 1. Click on the service account you just created
 2. Go to the "Keys" tab
 3. Click "Add Key" → "Create new key"
-4. Select "JSON" and click "Create"
-5. Save the downloaded JSON file securely (e.g., `~/.config/tasker/credentials.json`)
+4. Select "JSON" format and click "Create"
+5. Save the downloaded JSON file somewhere safe, like `~/.config/tasktriage/credentials.json`
+
+Don't lose this file. You can't re-download it.
 
 ### 5. Set Up Your Google Drive Folder
 
-1. Create a folder in Google Drive for your notes (e.g., "TaskerNotes")
-2. Inside this folder, create two subfolders: `daily` and `weekly`
-3. **Important**: Share the folder with your service account:
+1. Create a folder in Google Drive for your notes (call it whatever you want, maybe "TaskTriageNotes")
+2. Inside that folder, create two subfolders: `daily` and `weekly`
+3. **Here's the critical part**: Share the parent folder with your service account
    - Right-click the folder → "Share"
-   - Add the service account email (found in the JSON file as `client_email`, looks like `name@project-id.iam.gserviceaccount.com`)
-   - Give it "Editor" access (needed to upload analysis files)
+   - Add the service account email (it's in the JSON file you downloaded, labeled `client_email`—looks like `name@project-id.iam.gserviceaccount.com`)
+   - Give it "Editor" access
+
+If you skip step 3, nothing will work and you'll spend an hour debugging permissions. Ask me how I know.
 
 ### 6. Get the Folder ID
 
 1. Open your notes folder in Google Drive
-2. The folder ID is in the URL: `https://drive.google.com/drive/folders/FOLDER_ID_HERE`
-3. Copy this ID
+2. Look at the URL: `https://drive.google.com/drive/folders/FOLDER_ID_HERE`
+3. Copy the folder ID from the URL
 
 ### 7. Configure Environment Variables
 
-Add to your `.env` file:
+Add these to your `.env` file:
 
 ```bash
 # Path to your service account credentials JSON file
@@ -168,7 +182,7 @@ GOOGLE_DRIVE_FOLDER_ID=your-folder-id-here
 # Local directory to save analysis output (REQUIRED for service accounts)
 # Service accounts don't have storage quota to upload files to Google Drive,
 # so analysis files must be saved locally
-ANALYSIS_OUTPUT_DIR=/path/to/analysis/output
+LOCAL_OUTPUT_DIR=/path/to/analysis/output
 
 # Optional: Force Google Drive as the source
 NOTES_SOURCE=gdrive
@@ -176,29 +190,29 @@ NOTES_SOURCE=gdrive
 
 ### 8. Create the Output Directory
 
-After configuring your `.env` file, create the output directory:
+After you've configured your `.env` file, run this to create the output directory structure:
 
 ```bash
 task setup:output-dir
 ```
 
-This creates the `daily/` and `weekly/` subdirectories in your `ANALYSIS_OUTPUT_DIR`.
+This creates the `daily/` and `weekly/` subdirectories inside your `LOCAL_OUTPUT_DIR`.
 
 ### Important: Service Account Limitations
 
-Google Drive service accounts **cannot upload files** because they don't have storage quota. Tasker uses a hybrid approach:
+Here's the annoying part: Google Drive service accounts **can't upload files** because they don't have storage quota. I know, it's weird. So TaskTriage uses a hybrid approach:
 
-- **Reads** notes from Google Drive (works with service account)
-- **Saves** analysis files locally to `ANALYSIS_OUTPUT_DIR`
+- **Reads** notes from Google Drive (works fine with service accounts)
+- **Saves** analysis files locally to `LOCAL_OUTPUT_DIR` (because uploading doesn't work)
 
-This is why `ANALYSIS_OUTPUT_DIR` is required when using Google Drive as your notes source.
+This is why `LOCAL_OUTPUT_DIR` is required when using Google Drive. Your analyzed tasks don't go back to the cloud—they stay on your machine.
 
 ### Google Drive Folder Structure
 
-Your Google Drive folder should have this structure (notes only, no analysis files):
+Your Google Drive folder should look like this (notes only, no analysis files):
 
 ```
-TaskerNotes/                          # Folder ID goes in GOOGLE_DRIVE_FOLDER_ID
+TaskTriageNotes/                          # This folder ID goes in GOOGLE_DRIVE_FOLDER_ID
 ├── daily/
 │   ├── 20251225_074353.txt           # Raw daily notes (text)
 │   ├── 20251225_074353.png           # Raw daily notes (image)
@@ -207,10 +221,10 @@ TaskerNotes/                          # Folder ID goes in GOOGLE_DRIVE_FOLDER_ID
     └── ...
 ```
 
-Analysis files are saved locally:
+Analysis files get saved locally instead:
 
 ```
-ANALYSIS_OUTPUT_DIR/
+LOCAL_OUTPUT_DIR/
 ├── daily/
 │   └── 20251225_074353.daily_analysis.txt  # Generated analysis
 └── weekly/
@@ -219,7 +233,7 @@ ANALYSIS_OUTPUT_DIR/
 
 ## Notes Directory Structure
 
-Whether using USB or Google Drive, the expected structure is:
+Whether you're using USB or Google Drive, TaskTriage expects this structure:
 
 ```
 Notes/
@@ -238,86 +252,90 @@ Notes/
 - **Text files**: `.txt`
 - **Image files**: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`
 
-Image files are automatically processed through Claude's vision API to extract handwritten text.
+Image files get run through Claude's vision API to extract your handwritten text automatically.
 
 ### Notes File Naming
 
-Files should be named with a timestamp prefix: `YYYYMMDD_HHMMSS.ext`
+Name your files with a timestamp prefix: `YYYYMMDD_HHMMSS.ext`
+
+This lets TaskTriage figure out which file is most recent and which ones have already been analyzed.
 
 ### Task Notation
 
-Task notation in notes:
-- Task categories: marked with a single underline above group of bullets
-- Completed tasks: marked with a checkmark (✓)
-- Removed/abandoned tasks: marked with an X
-- Urgent tasks: marked with a star (☆)
+How to mark up your handwritten notes:
+- **Task categories**: Draw a single underline above a group of bullets
+- **Completed tasks**: Add a checkmark (✓)
+- **Removed/abandoned tasks**: Mark with an X
+- **Urgent tasks**: Add an asterisk (*)
 
 ## Usage
 
 ### Daily Analysis
 
-Analyze the most recent unanalyzed daily notes file:
+To analyze your most recent unanalyzed daily notes:
 
 ```bash
-analyze-tasks --type daily
-# or using the tasker command
-tasker --type daily
-# or with shell alias
+task-triage --type daily
+# or using the tasktriage command
+tasktriage --type daily
+# or just use the alias (if you set it up)
 daily
 ```
 
-This will:
-1. Find the most recent `.txt` or image file in `Notes/daily/` without an existing analysis
-2. Extract text from images if needed (using Claude's vision API)
-3. Generate an execution plan using the daily prompt
-4. Save the analysis as `{filename}.daily_analysis.txt`
+What happens:
+1. TaskTriage finds the most recent `.txt` or image file in `Notes/daily/` that doesn't have an analysis yet
+2. If it's an image, Claude's vision API extracts the text from your handwriting
+3. The daily analysis prompt kicks in and generates a realistic execution plan
+4. The analysis gets saved as `{filename}.daily_analysis.txt`
 
 ### Weekly Analysis
 
-Generate a weekly review from the previous week's daily analyses:
+To generate a weekly review from your previous week's daily work:
 
 ```bash
-analyze-tasks --type weekly
-# or using the tasker command
-tasker --type weekly
-# or with shell alias
+task-triage --type weekly
+# or using the tasktriage command
+tasktriage --type weekly
+# or just use the alias
 weekly
 ```
 
-This will:
-1. Collect all `*.daily_analysis.txt` files from the previous Monday-Sunday
-2. Combine them with date labels
-3. Generate a comprehensive weekly analysis
-4. Save to `Notes/weekly/{week_start}.weekly_analysis.txt`
+What happens:
+1. Grabs all `*.daily_analysis.txt` files from the previous Monday through Sunday
+2. Combines them with date labels
+3. Generates a comprehensive weekly analysis looking at patterns and problems
+4. Saves to `Notes/weekly/{week_start}.weekly_analysis.txt`
 
 ## Daily Analysis Output
 
-The daily analysis includes:
+The daily analysis gives you:
 
-- **Prioritized task list** ordered by: starred work → starred home → unstarred work → unstarred home
-- **Action steps** broken into 2-3 concrete, sequential steps per task
+- **Prioritized task list** in order: starred work → starred home → unstarred work → unstarred home (because that's probably what you actually care about)
+- **Action steps**: Each task gets broken into 2-3 concrete, sequential steps so you know where to start
 - **Time estimates** and **energy levels** (Low/Medium/High) for each task
-- **Task splitting** for oversized items ([Today Portion] / [Later Portion])
-- **Workload guardrails** keeping total focused work to 6-7 hours
-- **Critical assessment** evaluating task clarity and planning patterns
+- **Task splitting** for oversized items—splits them into [Today Portion] and [Later Portion] so you're not lying to yourself
+- **Workload guardrails** that keep your total focused work at 6-7 hours (not the 14 you originally planned)
+- **Critical assessment** that calls out when your task descriptions are vague or your planning patterns are problematic
 
 ## Weekly Analysis Output
 
-The weekly analysis includes:
+The weekly analysis shows you:
 
-- **Completion & follow-through analysis** identifying deferral patterns
-- **Mis-prioritization detection** comparing intent vs. actual execution
-- **Scope & estimation accuracy** review
-- **Energy alignment analysis** for optimal task scheduling
-- **Corrected priority model** based on observed behavior
-- **Next-week planning strategy** with capacity assumptions and day-typing guidance
+- **Completion & follow-through analysis**: Where do you keep deferring stuff?
+- **Mis-prioritization detection**: What you said was important vs. what you actually did
+- **Scope & estimation accuracy**: How wrong were your time estimates? (It's okay, we're all bad at this)
+- **Energy alignment analysis**: Are you scheduling high-energy tasks when you're exhausted?
+- **Corrected priority model** based on your actual behavior, not your aspirational self
+- **Next-week planning strategy** with realistic capacity assumptions and guidance on how to structure your days
 
 ## Task Commands
+
+If you're using Task for automation, here are the available commands:
 
 ```bash
 task setup            # Full first-time setup (venv + install + env)
 task setup:env        # Create .env file from template
-task setup:output-dir # Create analysis output directory (for Google Drive users)
+task setup:output-dir # Create analysis output directory (Google Drive users need this)
 task install          # Install dependencies with uv
 task venv             # Create virtual environment
 task sync             # Sync dependencies from lock file
@@ -326,12 +344,12 @@ task test             # Run tests
 task aliases          # Add daily/weekly shell aliases
 task aliases:remove   # Remove shell aliases
 task clean            # Remove build artifacts
-task clean:all        # Remove all generated files including venv
+task clean:all        # Nuclear option: remove everything including venv
 ```
 
 ## Testing
 
-The project includes a comprehensive test suite using pytest. Tests are organized by module for maintainability.
+The project has a test suite using pytest. Tests are split up by module so you can find what you're looking for.
 
 ### Running Tests
 
@@ -339,7 +357,7 @@ The project includes a comprehensive test suite using pytest. Tests are organize
 # Run all tests
 pytest
 
-# Run all tests with verbose output
+# Run with verbose output to see what's actually happening
 pytest -v
 
 # Run tests for a specific module
@@ -347,10 +365,10 @@ pytest tests/test_config.py
 pytest tests/test_files.py
 pytest tests/test_gdrive.py
 
-# Run tests with coverage report
-pytest --cov=tasker --cov-report=term-missing
+# Get a coverage report to see what you missed
+pytest --cov=tasktriage --cov-report=term-missing
 
-# Run only fast tests (skip slow integration tests)
+# Skip the slow integration tests
 pytest -m "not slow"
 ```
 
@@ -371,9 +389,9 @@ tests/
 ### Writing Tests
 
 Tests use `unittest.mock` (`Mock`, `MagicMock`, `patch`) to avoid:
-- Actual API calls to Claude or Google Drive
-- File system side effects
-- Network dependencies
+- Actually calling Claude or Google Drive APIs (and burning through your API credits)
+- Messing with the file system
+- Network dependencies that make tests flaky
 
 Example of mocking the Claude API:
 
@@ -381,7 +399,7 @@ Example of mocking the Claude API:
 from unittest.mock import patch, MagicMock
 
 def test_analyze_tasks():
-    with patch("tasker.analysis.ChatAnthropic") as mock_llm:
+    with patch("tasktriage.analysis.ChatAnthropic") as mock_llm:
         mock_instance = MagicMock()
         mock_response = MagicMock()
         mock_response.content = "Analysis result"
@@ -393,14 +411,16 @@ def test_analyze_tasks():
 
 ## Project Structure
 
+Here's how the code is organized:
+
 ```
-tasker/
+tasktriage/
 ├── .env.template      # Environment variables template
 ├── config.yaml        # Claude model configuration
 ├── pyproject.toml     # Project dependencies and metadata
 ├── Taskfile.yml       # Task runner configuration
 ├── README.md
-├── tasker/            # Python package
+├── tasktriage/        # Python package
 │   ├── __init__.py    # Package exports
 │   ├── config.py      # Configuration and environment handling
 │   ├── prompts.py     # LangChain prompt templates
@@ -422,10 +442,10 @@ tasker/
 
 ## Programmatic Usage
 
-The package can also be used as a library:
+You can also use TaskTriage as a library in your own Python code:
 
 ```python
-from tasker import (
+from tasktriage import (
     analyze_tasks,
     get_daily_prompt,
     get_weekly_prompt,
@@ -445,7 +465,7 @@ print(daily_prompt.input_variables)  # ['current_date', 'task_notes']
 weekly_prompt = get_weekly_prompt()
 print(weekly_prompt.input_variables)  # ['week_start', 'week_end', 'task_notes']
 
-# Use Google Drive client directly
+# Use the Google Drive client directly
 client = GoogleDriveClient()
 files = client.list_notes_files("daily")
 ```
@@ -455,26 +475,28 @@ files = client.list_notes_files("daily")
 ### Google Drive Issues
 
 **"Google Drive credentials path not set"**
-- Ensure `GOOGLE_CREDENTIALS_PATH` is set in your `.env` file
-- Verify the path points to a valid JSON credentials file
+- Make sure `GOOGLE_CREDENTIALS_PATH` is set in your `.env` file
+- Double-check that the path actually points to your credentials JSON file
 
 **"Subfolder 'daily' not found in Google Drive folder"**
-- Create `daily` and `weekly` subfolders in your Google Drive notes folder
-- Make sure the folder is shared with your service account email
+- You need to create `daily` and `weekly` subfolders in your Google Drive notes folder
+- Also confirm the parent folder is shared with your service account (easy to forget this step)
 
 **"Permission denied" errors**
-- Verify the service account has "Editor" access to the folder
-- Re-share the folder with the service account email
+- Check that your service account has "Editor" access to the folder
+- Try removing and re-sharing the folder with the service account email
+- Remember: the service account email is in your credentials JSON file as `client_email`
 
 **"No unanalyzed notes files found"**
-- Check that your notes files follow the naming format: `YYYYMMDD_HHMMSS.txt` or `.png`
-- Verify files are in the correct subfolder (`daily/` or `weekly/`)
+- Your notes files need to follow the naming format: `YYYYMMDD_HHMMSS.txt` or `.png`
+- Make sure they're in the correct subfolder (`daily/` or `weekly/`)
+- TaskTriage is looking for files that don't have a matching `.daily_analysis.txt` or `.weekly_analysis.txt` file
 
 ### USB Directory Issues
 
 **"USB directory not found"**
-- Ensure your device is mounted and accessible
-- Verify the `USB_DIR` path in your `.env` file is correct
+- Is your device actually plugged in and mounted?
+- Check that the `USB_DIR` path in your `.env` file is correct and points to the right location
 
 ## License
 

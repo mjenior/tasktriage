@@ -1,5 +1,5 @@
 """
-Tests for tasker.files module.
+Tests for tasktriage.files module.
 """
 
 from datetime import datetime, timedelta
@@ -14,9 +14,9 @@ class TestLoadTaskNotesUsb:
 
     def test_loads_text_file(self, mock_usb_dir, sample_notes_file):
         """Should load content from a text file."""
-        with patch("tasker.files.USB_DIR", str(mock_usb_dir)), \
-             patch("tasker.files.get_active_source", return_value="usb"):
-            from tasker.files import load_task_notes
+        with patch("tasktriage.files.USB_DIR", str(mock_usb_dir)), \
+             patch("tasktriage.files.get_active_source", return_value="usb"):
+            from tasktriage.files import load_task_notes
 
             content, path, file_date = load_task_notes("daily")
 
@@ -26,12 +26,12 @@ class TestLoadTaskNotesUsb:
 
     def test_loads_png_file_with_text_extraction(self, mock_usb_dir, sample_image_file):
         """Should extract text from PNG file using vision API."""
-        with patch("tasker.files.USB_DIR", str(mock_usb_dir)), \
-             patch("tasker.files.get_active_source", return_value="usb"), \
-             patch("tasker.files.extract_text_from_image") as mock_extract:
+        with patch("tasktriage.files.USB_DIR", str(mock_usb_dir)), \
+             patch("tasktriage.files.get_active_source", return_value="usb"), \
+             patch("tasktriage.files.extract_text_from_image") as mock_extract:
             mock_extract.return_value = "Extracted task notes"
 
-            from tasker.files import load_task_notes
+            from tasktriage.files import load_task_notes
 
             content, path, file_date = load_task_notes("daily")
 
@@ -45,9 +45,9 @@ class TestLoadTaskNotesUsb:
         notes_path = daily_dir / "20251228_100000.txt"
         notes_path.write_text("Some tasks")
 
-        with patch("tasker.files.USB_DIR", str(mock_usb_dir)), \
-             patch("tasker.files.get_active_source", return_value="usb"):
-            from tasker.files import load_task_notes
+        with patch("tasktriage.files.USB_DIR", str(mock_usb_dir)), \
+             patch("tasktriage.files.get_active_source", return_value="usb"):
+            from tasktriage.files import load_task_notes
 
             content, path, file_date = load_task_notes("daily")
 
@@ -69,9 +69,9 @@ class TestLoadTaskNotesUsb:
         newer_notes = daily_dir / "20251230_090000.txt"
         newer_notes.write_text("Newer tasks")
 
-        with patch("tasker.files.USB_DIR", str(mock_usb_dir)), \
-             patch("tasker.files.get_active_source", return_value="usb"):
-            from tasker.files import load_task_notes
+        with patch("tasktriage.files.USB_DIR", str(mock_usb_dir)), \
+             patch("tasktriage.files.get_active_source", return_value="usb"):
+            from tasktriage.files import load_task_notes
 
             content, path, file_date = load_task_notes("daily")
 
@@ -80,9 +80,9 @@ class TestLoadTaskNotesUsb:
 
     def test_raises_when_directory_not_found(self, mock_usb_dir):
         """Should raise FileNotFoundError when directory doesn't exist."""
-        with patch("tasker.files.USB_DIR", "/nonexistent/path"), \
-             patch("tasker.files.get_active_source", return_value="usb"):
-            from tasker.files import load_task_notes
+        with patch("tasktriage.files.USB_DIR", "/nonexistent/path"), \
+             patch("tasktriage.files.get_active_source", return_value="usb"):
+            from tasktriage.files import load_task_notes
 
             with pytest.raises(FileNotFoundError, match="not found"):
                 load_task_notes("daily")
@@ -94,9 +94,9 @@ class TestLoadTaskNotesUsb:
         analysis = daily_dir / "20251231_143000.daily_analysis.txt"
         analysis.write_text("Analysis content")
 
-        with patch("tasker.files.USB_DIR", str(mock_usb_dir)), \
-             patch("tasker.files.get_active_source", return_value="usb"):
-            from tasker.files import load_task_notes
+        with patch("tasktriage.files.USB_DIR", str(mock_usb_dir)), \
+             patch("tasktriage.files.get_active_source", return_value="usb"):
+            from tasktriage.files import load_task_notes
 
             with pytest.raises(FileNotFoundError, match="No unanalyzed"):
                 load_task_notes("daily")
@@ -114,9 +114,9 @@ class TestLoadTaskNotesGdrive:
         mock_client.file_exists.return_value = False
         mock_client.download_file_text.return_value = "GDrive task content"
 
-        with patch("tasker.files.get_active_source", return_value="gdrive"), \
-             patch("tasker.gdrive.GoogleDriveClient", return_value=mock_client):
-            from tasker.files import load_task_notes
+        with patch("tasktriage.files.get_active_source", return_value="gdrive"), \
+             patch("tasktriage.gdrive.GoogleDriveClient", return_value=mock_client):
+            from tasktriage.files import load_task_notes
 
             content, path, file_date = load_task_notes("daily")
 
@@ -141,12 +141,12 @@ class TestLoadTaskNotesGdrive:
             0x44, 0xAE, 0x42, 0x60, 0x82
         ])
 
-        with patch("tasker.files.get_active_source", return_value="gdrive"), \
-             patch("tasker.gdrive.GoogleDriveClient", return_value=mock_client), \
-             patch("tasker.files.extract_text_from_image") as mock_extract:
+        with patch("tasktriage.files.get_active_source", return_value="gdrive"), \
+             patch("tasktriage.gdrive.GoogleDriveClient", return_value=mock_client), \
+             patch("tasktriage.files.extract_text_from_image") as mock_extract:
             mock_extract.return_value = "Extracted from GDrive image"
 
-            from tasker.files import load_task_notes
+            from tasktriage.files import load_task_notes
 
             content, path, file_date = load_task_notes("daily")
 
@@ -168,12 +168,12 @@ class TestLoadTaskNotesGdrive:
             0x44, 0xAE, 0x42, 0x60, 0x82
         ])
 
-        with patch("tasker.files.get_active_source", return_value="gdrive"), \
-             patch("tasker.gdrive.GoogleDriveClient", return_value=mock_client), \
-             patch("tasker.files.extract_text_from_image") as mock_extract:
+        with patch("tasktriage.files.get_active_source", return_value="gdrive"), \
+             patch("tasktriage.gdrive.GoogleDriveClient", return_value=mock_client), \
+             patch("tasktriage.files.extract_text_from_image") as mock_extract:
             mock_extract.return_value = "Extracted from page 1"
 
-            from tasker.files import load_task_notes
+            from tasktriage.files import load_task_notes
 
             content, path, file_date = load_task_notes("daily")
 
@@ -194,9 +194,9 @@ class TestLoadTaskNotesGdrive:
         mock_client.file_exists.side_effect = file_exists_side_effect
         mock_client.download_file_text.return_value = "Older notes from text file"
 
-        with patch("tasker.files.get_active_source", return_value="gdrive"), \
-             patch("tasker.gdrive.GoogleDriveClient", return_value=mock_client):
-            from tasker.files import load_task_notes
+        with patch("tasktriage.files.get_active_source", return_value="gdrive"), \
+             patch("tasktriage.gdrive.GoogleDriveClient", return_value=mock_client):
+            from tasktriage.files import load_task_notes
 
             content, path, file_date = load_task_notes("daily")
 
@@ -220,12 +220,12 @@ class TestLoadTaskNotesGdrive:
             0x44, 0xAE, 0x42, 0x60, 0x82
         ])
 
-        with patch("tasker.files.get_active_source", return_value="gdrive"), \
-             patch("tasker.gdrive.GoogleDriveClient", return_value=mock_client), \
-             patch("tasker.files.extract_text_from_image") as mock_extract:
+        with patch("tasktriage.files.get_active_source", return_value="gdrive"), \
+             patch("tasktriage.gdrive.GoogleDriveClient", return_value=mock_client), \
+             patch("tasktriage.files.extract_text_from_image") as mock_extract:
             mock_extract.return_value = "Extracted text"
 
-            from tasker.files import load_task_notes
+            from tasktriage.files import load_task_notes
             load_task_notes("daily")
 
             # Verify file_exists was called with timestamp-based analysis filename
@@ -253,9 +253,9 @@ class TestCollectWeeklyAnalysesUsb:
             analysis_path = daily_dir / f"{timestamp}.daily_analysis.txt"
             analysis_path.write_text(f"Analysis for day {i + 1}")
 
-        with patch("tasker.files.USB_DIR", str(mock_usb_dir)), \
-             patch("tasker.files.get_active_source", return_value="usb"):
-            from tasker.files import collect_weekly_analyses
+        with patch("tasktriage.files.USB_DIR", str(mock_usb_dir)), \
+             patch("tasktriage.files.get_active_source", return_value="usb"):
+            from tasktriage.files import collect_weekly_analyses
 
             combined, output_path, week_start, week_end = collect_weekly_analyses()
 
@@ -279,9 +279,9 @@ class TestCollectWeeklyAnalysesUsb:
         timestamp = last_monday.strftime("%Y%m%d_080000")
         (daily_dir / f"{timestamp}.daily_analysis.txt").write_text("Analysis")
 
-        with patch("tasker.files.USB_DIR", str(mock_usb_dir)), \
-             patch("tasker.files.get_active_source", return_value="usb"):
-            from tasker.files import collect_weekly_analyses
+        with patch("tasktriage.files.USB_DIR", str(mock_usb_dir)), \
+             patch("tasktriage.files.get_active_source", return_value="usb"):
+            from tasktriage.files import collect_weekly_analyses
 
             collect_weekly_analyses()
 
@@ -289,9 +289,9 @@ class TestCollectWeeklyAnalysesUsb:
 
     def test_raises_when_no_analyses_found(self, mock_usb_dir):
         """Should raise FileNotFoundError when no analyses found for the week."""
-        with patch("tasker.files.USB_DIR", str(mock_usb_dir)), \
-             patch("tasker.files.get_active_source", return_value="usb"):
-            from tasker.files import collect_weekly_analyses
+        with patch("tasktriage.files.USB_DIR", str(mock_usb_dir)), \
+             patch("tasktriage.files.get_active_source", return_value="usb"):
+            from tasktriage.files import collect_weekly_analyses
 
             with pytest.raises(FileNotFoundError, match="No daily analysis files"):
                 collect_weekly_analyses()
@@ -302,11 +302,11 @@ class TestSaveAnalysis:
 
     def test_saves_analysis_to_usb(self, mock_usb_dir, sample_notes_file):
         """Should save analysis file next to the input file."""
-        from tasker.files import save_analysis
+        from tasktriage.files import save_analysis
 
         analysis_content = "# Daily Execution Order\n\n1. Task one"
 
-        with patch("tasker.files.USB_DIR", str(mock_usb_dir)):
+        with patch("tasktriage.files.USB_DIR", str(mock_usb_dir)):
             output_path = save_analysis(analysis_content, sample_notes_file, "daily")
 
             assert output_path.exists()
@@ -319,8 +319,8 @@ class TestSaveAnalysis:
         """Should upload analysis to Google Drive for gdrive:// paths."""
         mock_client = MagicMock()
 
-        with patch("tasker.gdrive.GoogleDriveClient", return_value=mock_client):
-            from tasker.files import _save_analysis_gdrive
+        with patch("tasktriage.gdrive.GoogleDriveClient", return_value=mock_client):
+            from tasktriage.files import _save_analysis_gdrive
 
             # Test the gdrive function directly since Path normalizes gdrive://
             virtual_path = Path("gdrive://daily/20251231_143000.txt")
@@ -335,8 +335,8 @@ class TestSaveAnalysis:
         """Should route to gdrive save when path is normalized (gdrive:/ not gdrive://)."""
         mock_client = MagicMock()
 
-        with patch("tasker.gdrive.GoogleDriveClient", return_value=mock_client):
-            from tasker.files import save_analysis
+        with patch("tasktriage.gdrive.GoogleDriveClient", return_value=mock_client):
+            from tasktriage.files import save_analysis
 
             # Path normalizes gdrive:// to gdrive:/ - this should still route to gdrive
             virtual_path = Path("gdrive://daily/20251231_143000.txt")
@@ -356,9 +356,9 @@ class TestSaveAnalysis:
         page_file = daily_dir / "20251228_100000_Page_1.png"
         page_file.write_bytes(b"fake png data")
 
-        from tasker.files import save_analysis
+        from tasktriage.files import save_analysis
 
-        with patch("tasker.files.USB_DIR", str(mock_usb_dir)):
+        with patch("tasktriage.files.USB_DIR", str(mock_usb_dir)):
             output_path = save_analysis("Analysis content", page_file, "daily")
 
             # Should use timestamp without page identifier
@@ -369,8 +369,8 @@ class TestSaveAnalysis:
         """Should save analysis using timestamp only, not page identifier, for GDrive."""
         mock_client = MagicMock()
 
-        with patch("tasker.gdrive.GoogleDriveClient", return_value=mock_client):
-            from tasker.files import _save_analysis_gdrive
+        with patch("tasktriage.gdrive.GoogleDriveClient", return_value=mock_client):
+            from tasktriage.files import _save_analysis_gdrive
 
             virtual_path = Path("gdrive://daily/20251228_100000_Page_1.png")
             analysis_content = "Analysis content"
@@ -385,9 +385,9 @@ class TestSaveAnalysis:
 
     def test_formats_output_with_header(self, mock_usb_dir, sample_notes_file):
         """Should format output with proper header."""
-        from tasker.files import save_analysis
+        from tasktriage.files import save_analysis
 
-        with patch("tasker.files.USB_DIR", str(mock_usb_dir)):
+        with patch("tasktriage.files.USB_DIR", str(mock_usb_dir)):
             output_path = save_analysis("Content", sample_notes_file, "daily")
 
             content = output_path.read_text()
@@ -400,9 +400,9 @@ class TestSaveAnalysis:
         png_input = daily_dir / "20251230_090000.png"
         png_input.write_bytes(b"fake png data")
 
-        from tasker.files import save_analysis
+        from tasktriage.files import save_analysis
 
-        with patch("tasker.files.USB_DIR", str(mock_usb_dir)):
+        with patch("tasktriage.files.USB_DIR", str(mock_usb_dir)):
             output_path = save_analysis("Analysis", png_input, "daily")
 
             assert output_path.suffix == ".txt"
@@ -413,16 +413,16 @@ class TestGetNotesSource:
 
     def test_returns_usb_when_usb_active(self):
         """Should return 'usb' when USB source is active."""
-        with patch("tasker.files.get_active_source", return_value="usb"):
-            from tasker.files import get_notes_source
+        with patch("tasktriage.files.get_active_source", return_value="usb"):
+            from tasktriage.files import get_notes_source
 
             result = get_notes_source()
             assert result == "usb"
 
     def test_returns_gdrive_when_gdrive_active(self):
         """Should return 'gdrive' when Google Drive source is active."""
-        with patch("tasker.files.get_active_source", return_value="gdrive"):
-            from tasker.files import get_notes_source
+        with patch("tasktriage.files.get_active_source", return_value="gdrive"):
+            from tasktriage.files import get_notes_source
 
             result = get_notes_source()
             assert result == "gdrive"
@@ -433,14 +433,14 @@ class TestFileExtensionConstants:
 
     def test_text_extensions_contains_txt(self):
         """TEXT_EXTENSIONS should include .txt."""
-        from tasker.files import TEXT_EXTENSIONS
+        from tasktriage.files import TEXT_EXTENSIONS
 
         assert ".txt" in TEXT_EXTENSIONS
 
     def test_all_extensions_includes_both(self):
         """ALL_EXTENSIONS should include both text and image extensions."""
-        from tasker.files import ALL_EXTENSIONS, TEXT_EXTENSIONS
-        from tasker.image import IMAGE_EXTENSIONS
+        from tasktriage.files import ALL_EXTENSIONS, TEXT_EXTENSIONS
+        from tasktriage.image import IMAGE_EXTENSIONS
 
         assert TEXT_EXTENSIONS.issubset(ALL_EXTENSIONS)
         assert IMAGE_EXTENSIONS.issubset(ALL_EXTENSIONS)
@@ -451,42 +451,42 @@ class TestExtractTimestamp:
 
     def test_extracts_from_simple_filename(self):
         """Should extract timestamp from simple filename."""
-        from tasker.files import _extract_timestamp
+        from tasktriage.files import _extract_timestamp
 
         result = _extract_timestamp("20251225_073454.txt")
         assert result == "20251225_073454"
 
     def test_extracts_from_png_filename(self):
         """Should extract timestamp from PNG filename."""
-        from tasker.files import _extract_timestamp
+        from tasktriage.files import _extract_timestamp
 
         result = _extract_timestamp("20251225_073454.png")
         assert result == "20251225_073454"
 
     def test_extracts_from_page_identifier_filename(self):
         """Should extract timestamp from filename with page identifier."""
-        from tasker.files import _extract_timestamp
+        from tasktriage.files import _extract_timestamp
 
         result = _extract_timestamp("20251225_073454_Page_1.png")
         assert result == "20251225_073454"
 
     def test_extracts_from_multi_digit_page(self):
         """Should extract timestamp from filename with multi-digit page number."""
-        from tasker.files import _extract_timestamp
+        from tasktriage.files import _extract_timestamp
 
         result = _extract_timestamp("20251225_073454_Page_12.png")
         assert result == "20251225_073454"
 
     def test_returns_none_for_invalid_filename(self):
         """Should return None for invalid filename."""
-        from tasker.files import _extract_timestamp
+        from tasktriage.files import _extract_timestamp
 
         result = _extract_timestamp("invalid_filename.txt")
         assert result is None
 
     def test_returns_none_for_analysis_filename(self):
         """Should return None for analysis filename without proper timestamp."""
-        from tasker.files import _extract_timestamp
+        from tasktriage.files import _extract_timestamp
 
         # Analysis filenames have the format timestamp.daily_analysis.txt
         # The stem is "timestamp.daily_analysis" which should still extract properly
@@ -503,42 +503,42 @@ class TestParseFilenameDateTime:
 
     def test_parses_simple_filename(self):
         """Should parse datetime from simple filename."""
-        from tasker.files import _parse_filename_datetime
+        from tasktriage.files import _parse_filename_datetime
 
         result = _parse_filename_datetime("20251225_073454.txt")
         assert result == datetime(2025, 12, 25, 7, 34, 54)
 
     def test_parses_png_filename(self):
         """Should parse datetime from PNG filename."""
-        from tasker.files import _parse_filename_datetime
+        from tasktriage.files import _parse_filename_datetime
 
         result = _parse_filename_datetime("20251231_143000.png")
         assert result == datetime(2025, 12, 31, 14, 30, 0)
 
     def test_parses_page_identifier_filename(self):
         """Should parse datetime from filename with page identifier."""
-        from tasker.files import _parse_filename_datetime
+        from tasktriage.files import _parse_filename_datetime
 
         result = _parse_filename_datetime("20251225_073454_Page_1.png")
         assert result == datetime(2025, 12, 25, 7, 34, 54)
 
     def test_parses_multi_digit_page(self):
         """Should parse datetime from filename with multi-digit page number."""
-        from tasker.files import _parse_filename_datetime
+        from tasktriage.files import _parse_filename_datetime
 
         result = _parse_filename_datetime("20251225_073454_Page_15.png")
         assert result == datetime(2025, 12, 25, 7, 34, 54)
 
     def test_returns_none_for_invalid_filename(self):
         """Should return None for invalid filename."""
-        from tasker.files import _parse_filename_datetime
+        from tasktriage.files import _parse_filename_datetime
 
         result = _parse_filename_datetime("not_a_timestamp.txt")
         assert result is None
 
     def test_returns_none_for_invalid_date(self):
         """Should return None for invalid date values."""
-        from tasker.files import _parse_filename_datetime
+        from tasktriage.files import _parse_filename_datetime
 
         # Month 13 is invalid
         result = _parse_filename_datetime("20251325_073454.txt")
@@ -554,12 +554,12 @@ class TestLoadTaskNotesWithPageIdentifiers:
         page_file = daily_dir / "20251228_100000_Page_1.png"
         page_file.write_bytes(b"fake png data")
 
-        with patch("tasker.files.USB_DIR", str(mock_usb_dir)), \
-             patch("tasker.files.get_active_source", return_value="usb"), \
-             patch("tasker.files.extract_text_from_image") as mock_extract:
+        with patch("tasktriage.files.USB_DIR", str(mock_usb_dir)), \
+             patch("tasktriage.files.get_active_source", return_value="usb"), \
+             patch("tasktriage.files.extract_text_from_image") as mock_extract:
             mock_extract.return_value = "Extracted text from page"
 
-            from tasker.files import load_task_notes
+            from tasktriage.files import load_task_notes
 
             content, path, file_date = load_task_notes("daily")
 
@@ -582,9 +582,9 @@ class TestLoadTaskNotesWithPageIdentifiers:
         older_file = daily_dir / "20251227_090000.txt"
         older_file.write_text("Older notes")
 
-        with patch("tasker.files.USB_DIR", str(mock_usb_dir)), \
-             patch("tasker.files.get_active_source", return_value="usb"):
-            from tasker.files import load_task_notes
+        with patch("tasktriage.files.USB_DIR", str(mock_usb_dir)), \
+             patch("tasktriage.files.get_active_source", return_value="usb"):
+            from tasktriage.files import load_task_notes
 
             content, path, file_date = load_task_notes("daily")
 

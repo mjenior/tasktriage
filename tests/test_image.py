@@ -1,5 +1,5 @@
 """
-Tests for tasker.image module.
+Tests for tasktriage.image module.
 """
 
 import base64
@@ -14,13 +14,13 @@ class TestImageExtensions:
 
     def test_image_extensions_contains_png(self):
         """Should include .png extension."""
-        from tasker.image import IMAGE_EXTENSIONS
+        from tasktriage.image import IMAGE_EXTENSIONS
 
         assert ".png" in IMAGE_EXTENSIONS
 
     def test_image_extensions_is_set(self):
         """IMAGE_EXTENSIONS should be a set for efficient lookups."""
-        from tasker.image import IMAGE_EXTENSIONS
+        from tasktriage.image import IMAGE_EXTENSIONS
 
         assert isinstance(IMAGE_EXTENSIONS, set)
 
@@ -30,7 +30,7 @@ class TestMediaTypeMap:
 
     def test_media_type_map_contains_png(self):
         """Should map .png to image/png."""
-        from tasker.image import MEDIA_TYPE_MAP
+        from tasktriage.image import MEDIA_TYPE_MAP
 
         assert ".png" in MEDIA_TYPE_MAP
         assert MEDIA_TYPE_MAP[".png"] == "image/png"
@@ -42,7 +42,7 @@ class TestExtractTextFromImage:
     @pytest.fixture
     def mock_llm(self):
         """Create a mock LLM that returns extracted text."""
-        with patch("tasker.image.ChatAnthropic") as mock_class:
+        with patch("tasktriage.image.ChatAnthropic") as mock_class:
             mock_instance = MagicMock()
             mock_response = MagicMock()
             mock_response.content = """Work
@@ -79,9 +79,9 @@ Home
         """Should extract text from a PNG image using Claude's vision API."""
         mock_class, mock_instance = mock_llm
 
-        with patch("tasker.image.fetch_api_key", return_value="test-key"), \
-             patch("tasker.image.load_model_config", return_value={}):
-            from tasker.image import extract_text_from_image
+        with patch("tasktriage.image.fetch_api_key", return_value="test-key"), \
+             patch("tasktriage.image.load_model_config", return_value={}):
+            from tasktriage.image import extract_text_from_image
 
             result = extract_text_from_image(png_file)
 
@@ -93,10 +93,10 @@ Home
         """Should use the provided API key."""
         mock_class, mock_instance = mock_llm
 
-        with patch("tasker.image.fetch_api_key") as mock_fetch, \
-             patch("tasker.image.load_model_config", return_value={}):
+        with patch("tasktriage.image.fetch_api_key") as mock_fetch, \
+             patch("tasktriage.image.load_model_config", return_value={}):
             mock_fetch.return_value = "custom-api-key"
-            from tasker.image import extract_text_from_image
+            from tasktriage.image import extract_text_from_image
 
             extract_text_from_image(png_file, api_key="custom-api-key")
 
@@ -106,9 +106,9 @@ Home
         """Should use default model when not specified in config."""
         mock_class, mock_instance = mock_llm
 
-        with patch("tasker.image.fetch_api_key", return_value="test-key"), \
-             patch("tasker.image.load_model_config", return_value={}):
-            from tasker.image import extract_text_from_image, DEFAULT_MODEL
+        with patch("tasktriage.image.fetch_api_key", return_value="test-key"), \
+             patch("tasktriage.image.load_model_config", return_value={}):
+            from tasktriage.image import extract_text_from_image, DEFAULT_MODEL
 
             extract_text_from_image(png_file)
 
@@ -122,9 +122,9 @@ Home
         mock_class, mock_instance = mock_llm
         config = {"model": "claude-sonnet-4-20250514", "temperature": 0.5}
 
-        with patch("tasker.image.fetch_api_key", return_value="test-key"), \
-             patch("tasker.image.load_model_config", return_value=config.copy()):
-            from tasker.image import extract_text_from_image
+        with patch("tasktriage.image.fetch_api_key", return_value="test-key"), \
+             patch("tasktriage.image.load_model_config", return_value=config.copy()):
+            from tasktriage.image import extract_text_from_image
 
             extract_text_from_image(png_file)
 
@@ -136,9 +136,9 @@ Home
         """Should encode image content as base64."""
         mock_class, mock_instance = mock_llm
 
-        with patch("tasker.image.fetch_api_key", return_value="test-key"), \
-             patch("tasker.image.load_model_config", return_value={}):
-            from tasker.image import extract_text_from_image
+        with patch("tasktriage.image.fetch_api_key", return_value="test-key"), \
+             patch("tasktriage.image.load_model_config", return_value={}):
+            from tasktriage.image import extract_text_from_image
 
             extract_text_from_image(png_file)
 
@@ -157,10 +157,10 @@ Home
         """Should include the image extraction prompt in the message."""
         mock_class, mock_instance = mock_llm
 
-        with patch("tasker.image.fetch_api_key", return_value="test-key"), \
-             patch("tasker.image.load_model_config", return_value={}):
-            from tasker.image import extract_text_from_image, IMAGE_EXTRACTION_PROMPT
-            from tasker.prompts import IMAGE_EXTRACTION_PROMPT
+        with patch("tasktriage.image.fetch_api_key", return_value="test-key"), \
+             patch("tasktriage.image.load_model_config", return_value={}):
+            from tasktriage.image import extract_text_from_image, IMAGE_EXTRACTION_PROMPT
+            from tasktriage.prompts import IMAGE_EXTRACTION_PROMPT
 
             extract_text_from_image(png_file)
 
@@ -174,9 +174,9 @@ Home
         """Should return the content from the LLM response."""
         mock_class, mock_instance = mock_llm
 
-        with patch("tasker.image.fetch_api_key", return_value="test-key"), \
-             patch("tasker.image.load_model_config", return_value={}):
-            from tasker.image import extract_text_from_image
+        with patch("tasktriage.image.fetch_api_key", return_value="test-key"), \
+             patch("tasktriage.image.load_model_config", return_value={}):
+            from tasktriage.image import extract_text_from_image
 
             result = extract_text_from_image(png_file)
 

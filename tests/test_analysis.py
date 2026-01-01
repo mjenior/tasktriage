@@ -1,5 +1,5 @@
 """
-Tests for tasker.analysis module.
+Tests for tasktriage.analysis module.
 """
 
 from unittest.mock import MagicMock, patch, call
@@ -13,7 +13,7 @@ class TestAnalyzeTasks:
     @pytest.fixture
     def mock_llm(self):
         """Create a mock ChatAnthropic instance."""
-        with patch("tasker.analysis.ChatAnthropic") as mock_class:
+        with patch("tasktriage.analysis.ChatAnthropic") as mock_class:
             mock_instance = MagicMock()
             mock_response = MagicMock()
             mock_response.content = """# Daily Execution Order
@@ -33,15 +33,15 @@ Good task clarity.
         """Should return the LLM response content."""
         mock_class, mock_instance, mock_response = mock_llm
 
-        with patch("tasker.analysis.fetch_api_key", return_value="test-key"), \
-             patch("tasker.analysis.load_model_config", return_value={}), \
-             patch("tasker.analysis.get_daily_prompt") as mock_prompt:
+        with patch("tasktriage.analysis.fetch_api_key", return_value="test-key"), \
+             patch("tasktriage.analysis.load_model_config", return_value={}), \
+             patch("tasktriage.analysis.get_daily_prompt") as mock_prompt:
             # Set up prompt mock to work with chain
             mock_prompt_template = MagicMock()
             mock_prompt_template.__or__ = lambda self, other: mock_instance
             mock_prompt.return_value = mock_prompt_template
 
-            from tasker.analysis import analyze_tasks
+            from tasktriage.analysis import analyze_tasks
 
             result = analyze_tasks(
                 "daily",
@@ -56,15 +56,15 @@ Good task clarity.
         """Should use daily prompt template for daily analysis."""
         mock_class, mock_instance, mock_response = mock_llm
 
-        with patch("tasker.analysis.fetch_api_key", return_value="test-key"), \
-             patch("tasker.analysis.load_model_config", return_value={}), \
-             patch("tasker.analysis.get_daily_prompt") as mock_daily, \
-             patch("tasker.analysis.get_weekly_prompt") as mock_weekly:
+        with patch("tasktriage.analysis.fetch_api_key", return_value="test-key"), \
+             patch("tasktriage.analysis.load_model_config", return_value={}), \
+             patch("tasktriage.analysis.get_daily_prompt") as mock_daily, \
+             patch("tasktriage.analysis.get_weekly_prompt") as mock_weekly:
             mock_prompt = MagicMock()
             mock_prompt.__or__ = lambda self, other: mock_instance
             mock_daily.return_value = mock_prompt
 
-            from tasker.analysis import analyze_tasks
+            from tasktriage.analysis import analyze_tasks
 
             analyze_tasks(
                 "daily",
@@ -79,15 +79,15 @@ Good task clarity.
         """Should use weekly prompt template for weekly analysis."""
         mock_class, mock_instance, mock_response = mock_llm
 
-        with patch("tasker.analysis.fetch_api_key", return_value="test-key"), \
-             patch("tasker.analysis.load_model_config", return_value={}), \
-             patch("tasker.analysis.get_daily_prompt") as mock_daily, \
-             patch("tasker.analysis.get_weekly_prompt") as mock_weekly:
+        with patch("tasktriage.analysis.fetch_api_key", return_value="test-key"), \
+             patch("tasktriage.analysis.load_model_config", return_value={}), \
+             patch("tasktriage.analysis.get_daily_prompt") as mock_daily, \
+             patch("tasktriage.analysis.get_weekly_prompt") as mock_weekly:
             mock_prompt = MagicMock()
             mock_prompt.__or__ = lambda self, other: mock_instance
             mock_weekly.return_value = mock_prompt
 
-            from tasker.analysis import analyze_tasks
+            from tasktriage.analysis import analyze_tasks
 
             analyze_tasks(
                 "weekly",
@@ -103,15 +103,15 @@ Good task clarity.
         """Should use the provided API key."""
         mock_class, mock_instance, mock_response = mock_llm
 
-        with patch("tasker.analysis.fetch_api_key") as mock_fetch, \
-             patch("tasker.analysis.load_model_config", return_value={}), \
-             patch("tasker.analysis.get_daily_prompt") as mock_prompt:
+        with patch("tasktriage.analysis.fetch_api_key") as mock_fetch, \
+             patch("tasktriage.analysis.load_model_config", return_value={}), \
+             patch("tasktriage.analysis.get_daily_prompt") as mock_prompt:
             mock_fetch.return_value = "custom-api-key"
             mock_prompt_template = MagicMock()
             mock_prompt_template.__or__ = lambda self, other: mock_instance
             mock_prompt.return_value = mock_prompt_template
 
-            from tasker.analysis import analyze_tasks
+            from tasktriage.analysis import analyze_tasks
 
             analyze_tasks(
                 "daily",
@@ -126,14 +126,14 @@ Good task clarity.
         """Should use default model when not specified in config."""
         mock_class, mock_instance, mock_response = mock_llm
 
-        with patch("tasker.analysis.fetch_api_key", return_value="test-key"), \
-             patch("tasker.analysis.load_model_config", return_value={}), \
-             patch("tasker.analysis.get_daily_prompt") as mock_prompt:
+        with patch("tasktriage.analysis.fetch_api_key", return_value="test-key"), \
+             patch("tasktriage.analysis.load_model_config", return_value={}), \
+             patch("tasktriage.analysis.get_daily_prompt") as mock_prompt:
             mock_prompt_template = MagicMock()
             mock_prompt_template.__or__ = lambda self, other: mock_instance
             mock_prompt.return_value = mock_prompt_template
 
-            from tasker.analysis import analyze_tasks, DEFAULT_MODEL
+            from tasktriage.analysis import analyze_tasks, DEFAULT_MODEL
 
             analyze_tasks(
                 "daily",
@@ -150,14 +150,14 @@ Good task clarity.
         mock_class, mock_instance, mock_response = mock_llm
         config = {"model": "claude-sonnet-4-20250514", "temperature": 0.5}
 
-        with patch("tasker.analysis.fetch_api_key", return_value="test-key"), \
-             patch("tasker.analysis.load_model_config", return_value=config.copy()), \
-             patch("tasker.analysis.get_daily_prompt") as mock_prompt:
+        with patch("tasktriage.analysis.fetch_api_key", return_value="test-key"), \
+             patch("tasktriage.analysis.load_model_config", return_value=config.copy()), \
+             patch("tasktriage.analysis.get_daily_prompt") as mock_prompt:
             mock_prompt_template = MagicMock()
             mock_prompt_template.__or__ = lambda self, other: mock_instance
             mock_prompt.return_value = mock_prompt_template
 
-            from tasker.analysis import analyze_tasks
+            from tasktriage.analysis import analyze_tasks
 
             analyze_tasks(
                 "daily",
@@ -174,14 +174,14 @@ Good task clarity.
         mock_class, mock_instance, mock_response = mock_llm
         config = {"model": "claude-haiku-4-5-20241022", "temperature": 0.3, "max_tokens": 2000}
 
-        with patch("tasker.analysis.fetch_api_key", return_value="test-key"), \
-             patch("tasker.analysis.load_model_config", return_value=config.copy()), \
-             patch("tasker.analysis.get_daily_prompt") as mock_prompt:
+        with patch("tasktriage.analysis.fetch_api_key", return_value="test-key"), \
+             patch("tasktriage.analysis.load_model_config", return_value=config.copy()), \
+             patch("tasktriage.analysis.get_daily_prompt") as mock_prompt:
             mock_prompt_template = MagicMock()
             mock_prompt_template.__or__ = lambda self, other: mock_instance
             mock_prompt.return_value = mock_prompt_template
 
-            from tasker.analysis import analyze_tasks
+            from tasktriage.analysis import analyze_tasks
 
             analyze_tasks(
                 "daily",
@@ -198,9 +198,9 @@ Good task clarity.
         """Should invoke the chain with task_notes and prompt variables."""
         mock_class, mock_instance, mock_response = mock_llm
 
-        with patch("tasker.analysis.fetch_api_key", return_value="test-key"), \
-             patch("tasker.analysis.load_model_config", return_value={}), \
-             patch("tasker.analysis.get_daily_prompt") as mock_prompt:
+        with patch("tasktriage.analysis.fetch_api_key", return_value="test-key"), \
+             patch("tasktriage.analysis.load_model_config", return_value={}), \
+             patch("tasktriage.analysis.get_daily_prompt") as mock_prompt:
             mock_prompt_template = MagicMock()
             # Track what invoke is called with
             chain_mock = MagicMock()
@@ -208,7 +208,7 @@ Good task clarity.
             mock_prompt_template.__or__ = lambda self, other: chain_mock
             mock_prompt.return_value = mock_prompt_template
 
-            from tasker.analysis import analyze_tasks
+            from tasktriage.analysis import analyze_tasks
 
             analyze_tasks(
                 "daily",
@@ -225,16 +225,16 @@ Good task clarity.
         """Should pass week_start and week_end for weekly analysis."""
         mock_class, mock_instance, mock_response = mock_llm
 
-        with patch("tasker.analysis.fetch_api_key", return_value="test-key"), \
-             patch("tasker.analysis.load_model_config", return_value={}), \
-             patch("tasker.analysis.get_weekly_prompt") as mock_prompt:
+        with patch("tasktriage.analysis.fetch_api_key", return_value="test-key"), \
+             patch("tasktriage.analysis.load_model_config", return_value={}), \
+             patch("tasktriage.analysis.get_weekly_prompt") as mock_prompt:
             chain_mock = MagicMock()
             chain_mock.invoke.return_value = mock_response
             mock_prompt_template = MagicMock()
             mock_prompt_template.__or__ = lambda self, other: chain_mock
             mock_prompt.return_value = mock_prompt_template
 
-            from tasker.analysis import analyze_tasks
+            from tasktriage.analysis import analyze_tasks
 
             analyze_tasks(
                 "weekly",
@@ -254,16 +254,16 @@ class TestAnalysisIntegration:
 
     def test_default_model_constant_exists(self):
         """DEFAULT_MODEL constant should be defined."""
-        from tasker.analysis import DEFAULT_MODEL
+        from tasktriage.analysis import DEFAULT_MODEL
 
         assert DEFAULT_MODEL is not None
         assert "claude" in DEFAULT_MODEL.lower()
 
     def test_imports_required_dependencies(self):
         """Should be able to import required functions."""
-        from tasker.analysis import analyze_tasks
-        from tasker.analysis import fetch_api_key, load_model_config
-        from tasker.analysis import get_daily_prompt, get_weekly_prompt
+        from tasktriage.analysis import analyze_tasks
+        from tasktriage.analysis import fetch_api_key, load_model_config
+        from tasktriage.analysis import get_daily_prompt, get_weekly_prompt
 
         assert callable(analyze_tasks)
         assert callable(fetch_api_key)

@@ -1,5 +1,5 @@
 """
-Tests for tasker.gdrive module.
+Tests for tasktriage.gdrive module.
 """
 
 import io
@@ -21,7 +21,7 @@ class TestGoogleDriveClientInit:
         monkeypatch.setenv("GOOGLE_CREDENTIALS_PATH", str(credentials_path))
         monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "test-folder-id")
 
-        from tasker.gdrive import GoogleDriveClient
+        from tasktriage.gdrive import GoogleDriveClient
 
         client = GoogleDriveClient()
         assert client.credentials_path == str(credentials_path)
@@ -32,7 +32,7 @@ class TestGoogleDriveClientInit:
         credentials_path = temp_dir / "credentials.json"
         credentials_path.write_text('{"type": "service_account"}')
 
-        from tasker.gdrive import GoogleDriveClient
+        from tasktriage.gdrive import GoogleDriveClient
 
         client = GoogleDriveClient(
             credentials_path=str(credentials_path),
@@ -46,7 +46,7 @@ class TestGoogleDriveClientInit:
         monkeypatch.delenv("GOOGLE_CREDENTIALS_PATH", raising=False)
         monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "test-folder-id")
 
-        from tasker.gdrive import GoogleDriveClient
+        from tasktriage.gdrive import GoogleDriveClient
 
         with pytest.raises(ValueError, match="credentials path not set"):
             GoogleDriveClient()
@@ -59,7 +59,7 @@ class TestGoogleDriveClientInit:
         monkeypatch.setenv("GOOGLE_CREDENTIALS_PATH", str(credentials_path))
         monkeypatch.delenv("GOOGLE_DRIVE_FOLDER_ID", raising=False)
 
-        from tasker.gdrive import GoogleDriveClient
+        from tasktriage.gdrive import GoogleDriveClient
 
         with pytest.raises(ValueError, match="folder ID not set"):
             GoogleDriveClient()
@@ -69,7 +69,7 @@ class TestGoogleDriveClientInit:
         monkeypatch.setenv("GOOGLE_CREDENTIALS_PATH", "/nonexistent/credentials.json")
         monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "test-folder-id")
 
-        from tasker.gdrive import GoogleDriveClient
+        from tasktriage.gdrive import GoogleDriveClient
 
         with pytest.raises(FileNotFoundError, match="credentials file not found"):
             GoogleDriveClient()
@@ -89,12 +89,12 @@ class TestGoogleDriveClientService:
 
     def test_service_lazily_initialized(self, mock_credentials):
         """Service should be lazily initialized on first access."""
-        with patch("tasker.gdrive.service_account.Credentials.from_service_account_file") as mock_creds, \
-             patch("tasker.gdrive.build") as mock_build:
+        with patch("tasktriage.gdrive.service_account.Credentials.from_service_account_file") as mock_creds, \
+             patch("tasktriage.gdrive.build") as mock_build:
             mock_creds.return_value = MagicMock()
             mock_build.return_value = MagicMock()
 
-            from tasker.gdrive import GoogleDriveClient
+            from tasktriage.gdrive import GoogleDriveClient
 
             client = GoogleDriveClient()
             assert client._service is None
@@ -107,13 +107,13 @@ class TestGoogleDriveClientService:
 
     def test_service_cached_after_first_access(self, mock_credentials):
         """Service should be cached after first initialization."""
-        with patch("tasker.gdrive.service_account.Credentials.from_service_account_file") as mock_creds, \
-             patch("tasker.gdrive.build") as mock_build:
+        with patch("tasktriage.gdrive.service_account.Credentials.from_service_account_file") as mock_creds, \
+             patch("tasktriage.gdrive.build") as mock_build:
             mock_creds.return_value = MagicMock()
             mock_service = MagicMock()
             mock_build.return_value = mock_service
 
-            from tasker.gdrive import GoogleDriveClient
+            from tasktriage.gdrive import GoogleDriveClient
 
             client = GoogleDriveClient()
 
@@ -136,12 +136,12 @@ class TestGoogleDriveClientOperations:
         monkeypatch.setenv("GOOGLE_CREDENTIALS_PATH", str(credentials_path))
         monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "root-folder-id")
 
-        with patch("tasker.gdrive.service_account.Credentials.from_service_account_file"), \
-             patch("tasker.gdrive.build") as mock_build:
+        with patch("tasktriage.gdrive.service_account.Credentials.from_service_account_file"), \
+             patch("tasktriage.gdrive.build") as mock_build:
             mock_service = MagicMock()
             mock_build.return_value = mock_service
 
-            from tasker.gdrive import GoogleDriveClient
+            from tasktriage.gdrive import GoogleDriveClient
 
             client = GoogleDriveClient()
             # Force service initialization
@@ -233,7 +233,7 @@ class TestGoogleDriveClientOperations:
         mock_files.get_media.return_value = mock_request
 
         # Mock MediaIoBaseDownload
-        with patch("tasker.gdrive.MediaIoBaseDownload") as mock_downloader_class:
+        with patch("tasktriage.gdrive.MediaIoBaseDownload") as mock_downloader_class:
             mock_downloader = MagicMock()
             mock_downloader.next_chunk.side_effect = [(None, False), (None, True)]
             mock_downloader_class.return_value = mock_downloader
@@ -303,7 +303,7 @@ class TestIsGdriveConfigured:
         monkeypatch.setenv("GOOGLE_CREDENTIALS_PATH", str(credentials_path))
         monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "test-folder-id")
 
-        from tasker.gdrive import is_gdrive_configured
+        from tasktriage.gdrive import is_gdrive_configured
 
         assert is_gdrive_configured() is True
 
@@ -312,7 +312,7 @@ class TestIsGdriveConfigured:
         monkeypatch.delenv("GOOGLE_CREDENTIALS_PATH", raising=False)
         monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "test-folder-id")
 
-        from tasker.gdrive import is_gdrive_configured
+        from tasktriage.gdrive import is_gdrive_configured
 
         assert is_gdrive_configured() is False
 
@@ -324,7 +324,7 @@ class TestIsGdriveConfigured:
         monkeypatch.setenv("GOOGLE_CREDENTIALS_PATH", str(credentials_path))
         monkeypatch.delenv("GOOGLE_DRIVE_FOLDER_ID", raising=False)
 
-        from tasker.gdrive import is_gdrive_configured
+        from tasktriage.gdrive import is_gdrive_configured
 
         assert is_gdrive_configured() is False
 
@@ -333,7 +333,7 @@ class TestIsGdriveConfigured:
         monkeypatch.setenv("GOOGLE_CREDENTIALS_PATH", "/nonexistent/credentials.json")
         monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "test-folder-id")
 
-        from tasker.gdrive import is_gdrive_configured
+        from tasktriage.gdrive import is_gdrive_configured
 
         assert is_gdrive_configured() is False
 
@@ -343,7 +343,7 @@ class TestParseFilenameDatetime:
 
     def test_parses_txt_filename(self):
         """Should parse datetime from .txt filename."""
-        from tasker.gdrive import parse_filename_datetime
+        from tasktriage.gdrive import parse_filename_datetime
 
         result = parse_filename_datetime("20251231_143000.txt")
 
@@ -351,7 +351,7 @@ class TestParseFilenameDatetime:
 
     def test_parses_png_filename(self):
         """Should parse datetime from .png filename."""
-        from tasker.gdrive import parse_filename_datetime
+        from tasktriage.gdrive import parse_filename_datetime
 
         result = parse_filename_datetime("20251230_090000.png")
 
@@ -359,7 +359,7 @@ class TestParseFilenameDatetime:
 
     def test_parses_analysis_filename(self):
         """Should parse datetime from analysis filename."""
-        from tasker.gdrive import parse_filename_datetime
+        from tasktriage.gdrive import parse_filename_datetime
 
         result = parse_filename_datetime("20251229_080000.daily_analysis.txt")
 
@@ -367,7 +367,7 @@ class TestParseFilenameDatetime:
 
     def test_parses_page_identifier_filename(self):
         """Should parse datetime from filename with page identifier."""
-        from tasker.gdrive import parse_filename_datetime
+        from tasktriage.gdrive import parse_filename_datetime
 
         result = parse_filename_datetime("20251225_073454_Page_1.png")
 
@@ -375,7 +375,7 @@ class TestParseFilenameDatetime:
 
     def test_parses_multi_digit_page_identifier(self):
         """Should parse datetime from filename with multi-digit page number."""
-        from tasker.gdrive import parse_filename_datetime
+        from tasktriage.gdrive import parse_filename_datetime
 
         result = parse_filename_datetime("20251225_073454_Page_15.png")
 
@@ -383,7 +383,7 @@ class TestParseFilenameDatetime:
 
     def test_returns_none_for_invalid_format(self):
         """Should return None for invalid filename format."""
-        from tasker.gdrive import parse_filename_datetime
+        from tasktriage.gdrive import parse_filename_datetime
 
         result = parse_filename_datetime("invalid_filename.txt")
 
@@ -391,7 +391,7 @@ class TestParseFilenameDatetime:
 
     def test_returns_none_for_partial_timestamp(self):
         """Should return None for partial timestamp."""
-        from tasker.gdrive import parse_filename_datetime
+        from tasktriage.gdrive import parse_filename_datetime
 
         result = parse_filename_datetime("20251231.txt")
 
@@ -403,49 +403,49 @@ class TestExtractTimestampFromFilename:
 
     def test_extracts_from_simple_filename(self):
         """Should extract timestamp from simple filename."""
-        from tasker.gdrive import extract_timestamp_from_filename
+        from tasktriage.gdrive import extract_timestamp_from_filename
 
         result = extract_timestamp_from_filename("20251231_143000.txt")
         assert result == "20251231_143000"
 
     def test_extracts_from_png_filename(self):
         """Should extract timestamp from PNG filename."""
-        from tasker.gdrive import extract_timestamp_from_filename
+        from tasktriage.gdrive import extract_timestamp_from_filename
 
         result = extract_timestamp_from_filename("20251225_073454.png")
         assert result == "20251225_073454"
 
     def test_extracts_from_page_identifier_filename(self):
         """Should extract timestamp from filename with page identifier."""
-        from tasker.gdrive import extract_timestamp_from_filename
+        from tasktriage.gdrive import extract_timestamp_from_filename
 
         result = extract_timestamp_from_filename("20251225_073454_Page_1.png")
         assert result == "20251225_073454"
 
     def test_extracts_from_multi_digit_page(self):
         """Should extract timestamp from filename with multi-digit page number."""
-        from tasker.gdrive import extract_timestamp_from_filename
+        from tasktriage.gdrive import extract_timestamp_from_filename
 
         result = extract_timestamp_from_filename("20251225_073454_Page_12.png")
         assert result == "20251225_073454"
 
     def test_extracts_from_analysis_filename(self):
         """Should extract timestamp from analysis filename."""
-        from tasker.gdrive import extract_timestamp_from_filename
+        from tasktriage.gdrive import extract_timestamp_from_filename
 
         result = extract_timestamp_from_filename("20251225_073454.daily_analysis.txt")
         assert result == "20251225_073454"
 
     def test_returns_none_for_invalid_filename(self):
         """Should return None for invalid filename."""
-        from tasker.gdrive import extract_timestamp_from_filename
+        from tasktriage.gdrive import extract_timestamp_from_filename
 
         result = extract_timestamp_from_filename("invalid_filename.txt")
         assert result is None
 
     def test_returns_none_for_short_filename(self):
         """Should return None for filename without proper timestamp."""
-        from tasker.gdrive import extract_timestamp_from_filename
+        from tasktriage.gdrive import extract_timestamp_from_filename
 
         result = extract_timestamp_from_filename("20251225.txt")
         assert result is None
@@ -456,21 +456,21 @@ class TestGetFileExtension:
 
     def test_returns_txt_for_text_plain(self):
         """Should return .txt for text/plain MIME type."""
-        from tasker.gdrive import get_file_extension
+        from tasktriage.gdrive import get_file_extension
 
         result = get_file_extension("text/plain")
         assert result == ".txt"
 
     def test_returns_png_for_image_png(self):
         """Should return .png for image/png MIME type."""
-        from tasker.gdrive import get_file_extension
+        from tasktriage.gdrive import get_file_extension
 
         result = get_file_extension("image/png")
         assert result == ".png"
 
     def test_returns_txt_for_unknown_mime_type(self):
         """Should return .txt as default for unknown MIME types."""
-        from tasker.gdrive import get_file_extension
+        from tasktriage.gdrive import get_file_extension
 
         result = get_file_extension("application/octet-stream")
         assert result == ".txt"
@@ -481,19 +481,19 @@ class TestMimeTypeConstants:
 
     def test_text_mime_types_contains_text_plain(self):
         """TEXT_MIME_TYPES should include text/plain."""
-        from tasker.gdrive import TEXT_MIME_TYPES
+        from tasktriage.gdrive import TEXT_MIME_TYPES
 
         assert "text/plain" in TEXT_MIME_TYPES
 
     def test_image_mime_types_contains_png(self):
         """IMAGE_MIME_TYPES should include image/png."""
-        from tasker.gdrive import IMAGE_MIME_TYPES
+        from tasktriage.gdrive import IMAGE_MIME_TYPES
 
         assert "image/png" in IMAGE_MIME_TYPES
 
     def test_all_mime_types_is_union(self):
         """ALL_MIME_TYPES should be union of text and image types."""
-        from tasker.gdrive import TEXT_MIME_TYPES, IMAGE_MIME_TYPES, ALL_MIME_TYPES
+        from tasktriage.gdrive import TEXT_MIME_TYPES, IMAGE_MIME_TYPES, ALL_MIME_TYPES
 
         expected = TEXT_MIME_TYPES | IMAGE_MIME_TYPES
         assert ALL_MIME_TYPES == expected

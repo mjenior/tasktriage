@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tasker"
+name = "tasktriage"
 version = "0.1.0"
 description = "Analyzes handwritten task notes from a note-taking device using Claude AI to generate actionable GTD-based execution plans."
 readme = "README.md"
@@ -18,8 +18,8 @@ dependencies = [
 ]
 
 [project.scripts]
-analyze-tasks = "tasker:main"
-tasker = "tasker:main"
+task-triage = "tasktriage:main"
+tasktriage = "tasktriage:main"
 
 [dependency-groups]
 dev = [

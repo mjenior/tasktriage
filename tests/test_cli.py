@@ -1,5 +1,5 @@
 """
-Tests for tasker.cli module.
+Tests for tasktriage.cli module.
 """
 
 import sys
@@ -17,11 +17,11 @@ class TestMainFunction:
     @pytest.fixture
     def mock_dependencies(self, temp_dir):
         """Set up mock dependencies for CLI tests."""
-        with patch("tasker.cli.load_task_notes") as mock_load, \
-             patch("tasker.cli.analyze_tasks") as mock_analyze, \
-             patch("tasker.cli.save_analysis") as mock_save, \
-             patch("tasker.cli.get_notes_source") as mock_source, \
-             patch("tasker.cli.collect_weekly_analyses") as mock_weekly:
+        with patch("tasktriage.cli.load_task_notes") as mock_load, \
+             patch("tasktriage.cli.analyze_tasks") as mock_analyze, \
+             patch("tasktriage.cli.save_analysis") as mock_save, \
+             patch("tasktriage.cli.get_notes_source") as mock_source, \
+             patch("tasktriage.cli.collect_weekly_analyses") as mock_weekly:
 
             # Default mock returns
             notes_path = temp_dir / "daily" / "20251231_143000.txt"
@@ -42,7 +42,7 @@ class TestMainFunction:
     def test_daily_analysis_workflow(self, mock_dependencies, capsys):
         """Should run complete daily analysis workflow."""
         with patch("sys.argv", ["tasker", "--type", "daily"]):
-            from tasker.cli import main
+            from tasktriage.cli import main
 
             main()
 
@@ -74,7 +74,7 @@ class TestMainFunction:
         mock_dependencies["save"].return_value = output_path
 
         with patch("sys.argv", ["tasker", "--type", "weekly"]):
-            from tasker.cli import main
+            from tasktriage.cli import main
 
             main()
 
@@ -87,7 +87,7 @@ class TestMainFunction:
     def test_shows_notes_source(self, mock_dependencies, capsys):
         """Should display which notes source is being used."""
         with patch("sys.argv", ["tasker", "--type", "daily"]):
-            from tasker.cli import main
+            from tasktriage.cli import main
 
             main()
 
@@ -99,7 +99,7 @@ class TestMainFunction:
         mock_dependencies["source"].return_value = "gdrive"
 
         with patch("sys.argv", ["tasker", "--type", "daily"]):
-            from tasker.cli import main
+            from tasktriage.cli import main
 
             main()
 
@@ -111,7 +111,7 @@ class TestMainFunction:
         mock_dependencies["source"].return_value = "usb"
 
         with patch("sys.argv", ["tasker", "--type", "daily"]):
-            from tasker.cli import main
+            from tasktriage.cli import main
 
             main()
 
@@ -128,7 +128,7 @@ class TestMainFunction:
         )
 
         with patch("sys.argv", ["tasker", "--type", "daily"]):
-            from tasker.cli import main
+            from tasktriage.cli import main
 
             main()
 
@@ -138,7 +138,7 @@ class TestMainFunction:
     def test_formats_date_for_daily_prompt(self, mock_dependencies):
         """Should format date correctly for daily prompt."""
         with patch("sys.argv", ["tasker", "--type", "daily"]):
-            from tasker.cli import main
+            from tasktriage.cli import main
 
             main()
 
@@ -161,7 +161,7 @@ class TestMainFunction:
         )
 
         with patch("sys.argv", ["tasker", "--type", "weekly"]):
-            from tasker.cli import main
+            from tasktriage.cli import main
 
             main()
 
@@ -172,7 +172,7 @@ class TestMainFunction:
     def test_default_type_is_daily(self, mock_dependencies):
         """Should default to daily analysis when no type specified."""
         with patch("sys.argv", ["tasker"]):
-            from tasker.cli import main
+            from tasktriage.cli import main
 
             main()
 
@@ -184,12 +184,12 @@ class TestErrorHandling:
 
     def test_handles_file_not_found_error(self, capsys):
         """Should handle FileNotFoundError gracefully."""
-        with patch("tasker.cli.get_notes_source", return_value="usb"), \
-             patch("tasker.cli.load_task_notes") as mock_load, \
+        with patch("tasktriage.cli.get_notes_source", return_value="usb"), \
+             patch("tasktriage.cli.load_task_notes") as mock_load, \
              patch("sys.argv", ["tasker", "--type", "daily"]):
             mock_load.side_effect = FileNotFoundError("Notes directory not found")
 
-            from tasker.cli import main
+            from tasktriage.cli import main
 
             with pytest.raises(SystemExit) as exc_info:
                 main()
@@ -201,12 +201,12 @@ class TestErrorHandling:
 
     def test_handles_general_exception(self, capsys):
         """Should handle general exceptions gracefully."""
-        with patch("tasker.cli.get_notes_source", return_value="usb"), \
-             patch("tasker.cli.load_task_notes") as mock_load, \
+        with patch("tasktriage.cli.get_notes_source", return_value="usb"), \
+             patch("tasktriage.cli.load_task_notes") as mock_load, \
              patch("sys.argv", ["tasker", "--type", "daily"]):
             mock_load.side_effect = Exception("Unexpected error")
 
-            from tasker.cli import main
+            from tasktriage.cli import main
 
             with pytest.raises(SystemExit) as exc_info:
                 main()
@@ -219,14 +219,14 @@ class TestErrorHandling:
         """Should handle API errors gracefully."""
         notes_path = temp_dir / "daily" / "20251231_143000.txt"
 
-        with patch("tasker.cli.get_notes_source", return_value="usb"), \
-             patch("tasker.cli.load_task_notes") as mock_load, \
-             patch("tasker.cli.analyze_tasks") as mock_analyze, \
+        with patch("tasktriage.cli.get_notes_source", return_value="usb"), \
+             patch("tasktriage.cli.load_task_notes") as mock_load, \
+             patch("tasktriage.cli.analyze_tasks") as mock_analyze, \
              patch("sys.argv", ["tasker", "--type", "daily"]):
             mock_load.return_value = ("Content", notes_path, datetime(2025, 12, 31, 14, 30, 0))
             mock_analyze.side_effect = Exception("API rate limit exceeded")
 
-            from tasker.cli import main
+            from tasktriage.cli import main
 
             with pytest.raises(SystemExit) as exc_info:
                 main()
@@ -239,24 +239,24 @@ class TestArgumentParsing:
 
     def test_accepts_daily_type(self):
         """Should accept --type daily argument."""
-        with patch("tasker.cli.get_notes_source", return_value="usb"), \
-             patch("tasker.cli.load_task_notes") as mock_load, \
-             patch("tasker.cli.analyze_tasks", return_value="Result"), \
-             patch("tasker.cli.save_analysis", return_value=Path("/tmp/analysis.txt")), \
+        with patch("tasktriage.cli.get_notes_source", return_value="usb"), \
+             patch("tasktriage.cli.load_task_notes") as mock_load, \
+             patch("tasktriage.cli.analyze_tasks", return_value="Result"), \
+             patch("tasktriage.cli.save_analysis", return_value=Path("/tmp/analysis.txt")), \
              patch("sys.argv", ["tasker", "--type", "daily"]):
             mock_load.return_value = ("Content", Path("/tmp/notes.txt"), datetime.now())
 
-            from tasker.cli import main
+            from tasktriage.cli import main
 
             main()
             mock_load.assert_called_with("daily")
 
     def test_accepts_weekly_type(self):
         """Should accept --type weekly argument."""
-        with patch("tasker.cli.get_notes_source", return_value="usb"), \
-             patch("tasker.cli.collect_weekly_analyses") as mock_weekly, \
-             patch("tasker.cli.analyze_tasks", return_value="Result"), \
-             patch("tasker.cli.save_analysis", return_value=Path("/tmp/analysis.txt")), \
+        with patch("tasktriage.cli.get_notes_source", return_value="usb"), \
+             patch("tasktriage.cli.collect_weekly_analyses") as mock_weekly, \
+             patch("tasktriage.cli.analyze_tasks", return_value="Result"), \
+             patch("tasktriage.cli.save_analysis", return_value=Path("/tmp/analysis.txt")), \
              patch("sys.argv", ["tasker", "--type", "weekly"]):
             mock_weekly.return_value = (
                 "Combined",
@@ -265,7 +265,7 @@ class TestArgumentParsing:
                 datetime.now()
             )
 
-            from tasker.cli import main
+            from tasktriage.cli import main
 
             main()
             mock_weekly.assert_called_once()
@@ -276,6 +276,6 @@ class TestImageExtensionConstant:
 
     def test_image_extensions_imported(self):
         """Should import IMAGE_EXTENSIONS from image module."""
-        from tasker.cli import IMAGE_EXTENSIONS
+        from tasktriage.cli import IMAGE_EXTENSIONS
 
         assert ".png" in IMAGE_EXTENSIONS
