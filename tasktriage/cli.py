@@ -46,7 +46,12 @@ def analyze_single_file(task_notes: str, notes_path, file_date, notes_type: str)
 
 
 def main():
-    """Main CLI entry point for task analysis."""
+    """Main CLI entry point for task analysis.
+
+    Enforces temporal hierarchy:
+    1. Daily analyses must complete before weekly analyses are checked
+    2. Weekly analyses must complete before monthly analyses are checked
+    """
     parser = argparse.ArgumentParser(
         description="Analyze task notes and generate execution plans"
     )
@@ -56,7 +61,6 @@ def main():
         choices=["png", "txt"],
         help="File type preference: png or txt (default: png)"
     )
-
     args = parser.parse_args()
 
     try:
@@ -65,14 +69,17 @@ def main():
         source_label = "Google Drive" if source == "gdrive" else "USB/Local"
         print(f"Using notes source: {source_label}\n")
 
+        # =================================================================
+        # LEVEL 1: DAILY ANALYSES
+        # =================================================================
         # Load all unanalyzed daily files
         unanalyzed_files = load_all_unanalyzed_task_notes("daily", args.files)
 
         print(f"Found {len(unanalyzed_files)} unanalyzed file(s)\n")
 
         # Process files in parallel
-        successful = 0
-        failed = 0
+        daily_successful = 0
+        daily_failed = 0
 
         with ThreadPoolExecutor(max_workers=5) as executor:
             # Submit all tasks
@@ -100,28 +107,34 @@ def main():
                 if success:
                     print(f"✓ Analyzed: {notes_path.name}{file_type}")
                     print(f"  Saved to: {output_path}\n")
-                    successful += 1
+                    daily_successful += 1
                 else:
                     print(f"✗ Failed: {notes_path.name}{file_type}")
                     print(f"  Error: {error_msg}\n")
-                    failed += 1
+                    daily_failed += 1
 
-        # Print summary
+        # Print daily summary
         print(f"\n{'='*50}")
-        print(f"Summary: {successful} successful, {failed} failed")
+        print(f"Daily Summary: {daily_successful} successful, {daily_failed} failed")
         print(f"{'='*50}")
 
-        # Check for weeks needing analysis
+        # =================================================================
+        # LEVEL 2: WEEKLY ANALYSES (only if daily analyses completed)
+        # =================================================================
+        # Only proceed to weekly if we have daily analyses (either existing or just created)
+        # This ensures the temporal hierarchy: daily → weekly
+
         from .files import _find_weeks_needing_analysis
         weeks_to_analyze = _find_weeks_needing_analysis()
+
+        weekly_successful = 0
+        weekly_failed = 0
 
         if weeks_to_analyze:
             print(f"\n{'='*50}")
             print(f"Auto-triggering weekly analyses")
+            print(f"  (based on completed daily analyses)")
             print(f"{'='*50}\n")
-
-            weekly_successful = 0
-            weekly_failed = 0
 
             for week_start, week_end in weeks_to_analyze:
                 week_label = week_start.strftime("%B %d") + " - " + week_end.strftime("%B %d, %Y")
@@ -149,7 +162,52 @@ def main():
             print(f"Weekly Summary: {weekly_successful} successful, {weekly_failed} failed")
             print(f"{'='*50}")
 
-        if failed > 0:
+        # =================================================================
+        # LEVEL 3: MONTHLY ANALYSES (only if weekly analyses completed)
+        # =================================================================
+        # Only proceed to monthly if we have weekly analyses (either existing or just created)
+        # This ensures the temporal hierarchy: daily → weekly → monthly
+
+        from .files import _find_months_needing_analysis, collect_monthly_analyses_for_month
+        months_to_analyze = _find_months_needing_analysis()
+
+        monthly_successful = 0
+        monthly_failed = 0
+
+        if months_to_analyze:
+            print(f"\n{'='*50}")
+            print(f"Auto-triggering monthly analyses")
+            print(f"  (based on completed weekly analyses)")
+            print(f"{'='*50}\n")
+
+            for month_start, month_end in months_to_analyze:
+                month_label = month_start.strftime("%B %Y")
+                try:
+                    print(f"Analyzing month: {month_label}")
+
+                    # Collect and analyze
+                    task_notes, notes_path, ms, me = collect_monthly_analyses_for_month(month_start, month_end)
+
+                    prompt_vars = {
+                        "month_start": ms.strftime("%B %d, %Y"),
+                        "month_end": me.strftime("%B %d, %Y"),
+                    }
+
+                    result = analyze_tasks("monthly", task_notes, **prompt_vars)
+                    output_path = save_analysis(result, notes_path, "monthly")
+
+                    print(f"  ✓ Monthly analysis saved to: {output_path}\n")
+                    monthly_successful += 1
+                except Exception as e:
+                    print(f"  ✗ Failed: {e}\n")
+                    monthly_failed += 1
+
+            print(f"{'='*50}")
+            print(f"Monthly Summary: {monthly_successful} successful, {monthly_failed} failed")
+            print(f"{'='*50}")
+
+        # Exit with error if any daily analyses failed
+        if daily_failed > 0:
             sys.exit(1)
 
     except FileNotFoundError as e:

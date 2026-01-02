@@ -58,7 +58,7 @@ class TestMainFunction:
             assert "USB/Local" in captured.out
             assert "Found 1 unanalyzed file(s)" in captured.out
             assert "✓ Analyzed:" in captured.out
-            assert "Summary: 1 successful, 0 failed" in captured.out
+            assert "Daily Summary: 1 successful, 0 failed" in captured.out
 
     def test_auto_weekly_analysis(self, mock_dependencies, capsys):
         """Should auto-trigger weekly analysis when conditions are met."""
@@ -90,6 +90,7 @@ class TestMainFunction:
 
             captured = capsys.readouterr()
             assert "Auto-triggering weekly analyses" in captured.out
+            assert "(based on completed daily analyses)" in captured.out
 
     def test_shows_notes_source(self, mock_dependencies, capsys):
         """Should display which notes source is being used."""

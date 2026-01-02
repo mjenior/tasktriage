@@ -75,6 +75,42 @@ class TestWeeklyPrompt:
         assert "Task analysis" in messages[1].content
 
 
+class TestMonthlyPrompt:
+    """Tests for monthly prompt template."""
+
+    def test_get_monthly_prompt_returns_chat_prompt_template(self):
+        """Should return a ChatPromptTemplate instance."""
+        from tasktriage.prompts import get_monthly_prompt
+
+        result = get_monthly_prompt()
+        assert isinstance(result, ChatPromptTemplate)
+
+    def test_monthly_prompt_has_required_input_variables(self):
+        """Should have month_start, month_end, and task_notes as input variables."""
+        from tasktriage.prompts import get_monthly_prompt
+
+        prompt = get_monthly_prompt()
+        assert "month_start" in prompt.input_variables
+        assert "month_end" in prompt.input_variables
+        assert "task_notes" in prompt.input_variables
+
+    def test_monthly_prompt_can_be_formatted(self):
+        """Should format correctly with provided variables."""
+        from tasktriage.prompts import get_monthly_prompt
+
+        prompt = get_monthly_prompt()
+        messages = prompt.format_messages(
+            month_start="December 1, 2024",
+            month_end="December 31, 2024",
+            task_notes="## Week 1\n\nWeekly analysis..."
+        )
+
+        assert len(messages) == 2
+        assert "December 1, 2024" in messages[0].content
+        assert "December 31, 2024" in messages[0].content
+        assert "Weekly analysis" in messages[1].content
+
+
 class TestPromptConstants:
     """Tests for prompt string constants."""
 
@@ -107,6 +143,21 @@ class TestPromptConstants:
 
         assert WEEKLY_HUMAN_PROMPT is not None
         assert "{task_notes}" in WEEKLY_HUMAN_PROMPT
+
+    def test_monthly_system_prompt_exists_and_not_empty(self):
+        """MONTHLY_SYSTEM_PROMPT should exist and contain content."""
+        from tasktriage.prompts import MONTHLY_SYSTEM_PROMPT
+
+        assert MONTHLY_SYSTEM_PROMPT is not None
+        assert len(MONTHLY_SYSTEM_PROMPT) > 100
+        assert "month" in MONTHLY_SYSTEM_PROMPT.lower()
+
+    def test_monthly_human_prompt_exists_and_not_empty(self):
+        """MONTHLY_HUMAN_PROMPT should exist and contain task_notes placeholder."""
+        from tasktriage.prompts import MONTHLY_HUMAN_PROMPT
+
+        assert MONTHLY_HUMAN_PROMPT is not None
+        assert "{task_notes}" in MONTHLY_HUMAN_PROMPT
 
     def test_image_extraction_prompt_exists_and_not_empty(self):
         """IMAGE_EXTRACTION_PROMPT should exist and contain extraction instructions."""
@@ -155,3 +206,17 @@ class TestPromptContent:
 
         content_lower = IMAGE_EXTRACTION_PROMPT.lower()
         assert "structure" in content_lower or "format" in content_lower
+
+    def test_monthly_prompt_includes_strategic_analysis(self):
+        """Monthly prompt should include strategic analysis guidance."""
+        from tasktriage.prompts import MONTHLY_SYSTEM_PROMPT
+
+        content_lower = MONTHLY_SYSTEM_PROMPT.lower()
+        assert "strategic" in content_lower or "achievement" in content_lower
+
+    def test_monthly_prompt_includes_systemic_patterns(self):
+        """Monthly prompt should mention systemic patterns and trends."""
+        from tasktriage.prompts import MONTHLY_SYSTEM_PROMPT
+
+        content_lower = MONTHLY_SYSTEM_PROMPT.lower()
+        assert "pattern" in content_lower or "trend" in content_lower

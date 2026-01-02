@@ -6,10 +6,11 @@ You know that feeling when you write a beautiful handwritten to-do list and then
 
 ## Overview
 
-Here's the deal: you write your tasks on a fancy note-taking device (reMarkable, Supernote). Those notes get synced to either a mounted drive or Google Drive. TaskTriage then swoops in, finds your latest scribbles, and uses Claude AI (via LangChain) to do two things:
+Here's the deal: you write your tasks on a note-taking device (reMarkable, Supernote, etc.). Those notes get synced to either a mounted drive or Google Drive. TaskTriage then swoops in, finds your latest scribbles, and uses Claude AI (via LangChain) to do two things:
 
 - **Daily Analysis**: Takes your categorized to-do list and transforms it into an actual realistic plan for a single day. You get time estimates, energy levels, and prioritized action steps. No more pretending you can do 47 things in one afternoon.
 - **Weekly Analysis**: Looks back at your week's worth of daily plans to spot patterns, figure out where things went sideways, and generate strategies to fix your planning approach. It's like a retrospective, but with less corporate speak.
+- **Monthly Analysis**: Analyzes a whole calendar month's worth of weekly reports to assess overall accomplishments, and craft new ghigh-level guidance for creating tasks for the next month.
 
 ## Features
 
@@ -196,7 +197,7 @@ After you've configured your `.env` file, run this to create the output director
 task setup:output-dir
 ```
 
-This creates the `daily/` and `weekly/` subdirectories inside your `LOCAL_OUTPUT_DIR`.
+This creates the `daily/`, `weekly/`, and `monthly/` subdirectories inside your `LOCAL_OUTPUT_DIR`.
 
 ### Important: Service Account Limitations
 
@@ -217,7 +218,9 @@ TaskTriageNotes/                          # This folder ID goes in GOOGLE_DRIVE_
 │   ├── 20251225_074353.txt           # Raw daily notes (text)
 │   ├── 20251225_074353.png           # Raw daily notes (image)
 │   └── ...
-└── weekly/
+├── weekly/
+│   └── ...
+└── monthly/
     └── ...
 ```
 
@@ -227,8 +230,10 @@ Analysis files get saved locally instead:
 LOCAL_OUTPUT_DIR/
 ├── daily/
 │   └── 20251225_074353.daily_analysis.txt  # Generated analysis
-└── weekly/
-    └── 20251223.weekly_analysis.txt        # Generated weekly analysis
+├── weekly/
+│   └── 20251223.weekly_analysis.txt        # Generated weekly analysis
+└── monthly/
+    └── 202512.monthly_analysis.txt        # Generated monthly analysis
 ```
 
 ## Notes Directory Structure
@@ -242,8 +247,10 @@ notes/
 │   ├── 20251226_083000.png              # Raw daily notes (image)
 │   ├── 20251225_074353.daily_analysis.txt  # Generated analysis
 │   └── ...
-└── weekly/
-    ├── 20251223.weekly_analysis.txt     # Generated weekly analysis
+├── weekly/
+│   ├── 20251223.weekly_analysis.txt     # Generated weekly analysis
+│   └── ...
+└── monthly/
     └── ...
 ```
 
@@ -320,7 +327,7 @@ When triggered:
 3. Generates a comprehensive weekly analysis looking at patterns and problems
 4. Saves to `Notes/weekly/{week_start}.weekly_analysis.txt`
 
-You don't have to manually trigger weekly analyses anymore—TaskTriage handles it automatically.
+* A similar thing happens for monthly analyses based on the weekly reports.
 
 ## Daily Analysis Output
 

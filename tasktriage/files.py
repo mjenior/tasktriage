@@ -148,7 +148,6 @@ def _load_all_unanalyzed_task_notes_usb(notes_type: str = "daily", file_preferen
     """Load all unanalyzed task notes from USB/local directory.
 
     Args:
-        notes_type: Type of notes to load (e.g., "daily", "weekly")
         file_preference: File type preference ("png" or "txt")
 
     Returns:
@@ -161,7 +160,7 @@ def _load_all_unanalyzed_task_notes_usb(notes_type: str = "daily", file_preferen
             f"USB directory not found: {USB_DIR}"
         )
 
-    notes_dir = base_dir / notes_type
+    notes_dir = base_dir / "daily"
 
     if not notes_dir.exists():
         raise FileNotFoundError(f"Notes directory not found: {notes_dir}")
@@ -192,7 +191,7 @@ def _load_all_unanalyzed_task_notes_usb(notes_type: str = "daily", file_preferen
 
         # Check if this file already has an associated analysis file
         # Use timestamp only so all pages of a multi-page note share one analysis
-        analysis_filename = f"{timestamp}.{notes_type}_analysis.txt"
+        analysis_filename = f"{timestamp}.daily_analysis.txt"
         analysis_path = notes_dir / analysis_filename
 
         if not analysis_path.exists():
@@ -896,6 +895,280 @@ def collect_weekly_analyses() -> tuple[str, Path, datetime, datetime]:
         return _collect_weekly_analyses_gdrive()
     else:
         return _collect_weekly_analyses_usb()
+
+
+# =============================================================================
+# Monthly Analysis Collection Functions
+# =============================================================================
+
+def _get_month_boundaries(date: datetime) -> tuple[datetime, datetime]:
+    """Get the first and last day of the month containing the given date.
+
+    Args:
+        date: Any date within the month
+
+    Returns:
+        Tuple of (month_start, month_end) as datetime objects
+    """
+    # First day of month
+    month_start = date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    # Last day of month - go to first day of next month, then back one day
+    if month_start.month == 12:
+        next_month = month_start.replace(year=month_start.year + 1, month=1)
+    else:
+        next_month = month_start.replace(month=month_start.month + 1)
+
+    month_end = next_month - timedelta(days=1)
+    month_end = month_end.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    return month_start, month_end
+
+
+def _collect_monthly_analyses_usb_for_month(month_start: datetime, month_end: datetime) -> tuple[str, Path, datetime, datetime]:
+    """Collect monthly analyses from USB/local directory for a specific month.
+
+    Args:
+        month_start: Start of month (first day)
+        month_end: End of month (last day)
+
+    Returns:
+        Tuple of (combined analysis text, output path, month start, month end)
+    """
+    base_dir = Path(USB_DIR)
+
+    if not base_dir.exists():
+        raise FileNotFoundError(
+            f"USB directory not found: {USB_DIR}"
+        )
+
+    weekly_dir = base_dir / "weekly"
+    monthly_dir = base_dir / "monthly"
+
+    if not weekly_dir.exists():
+        raise FileNotFoundError(f"weekly directory not found: {weekly_dir}")
+
+    monthly_dir.mkdir(exist_ok=True)
+
+    # Find all weekly_analysis files from the specified month
+    analysis_files = sorted(weekly_dir.glob("*.weekly_analysis.txt"))
+
+    collected_analyses = []
+    for analysis_path in analysis_files:
+        try:
+            date_str = analysis_path.stem.split(".")[0]
+            file_date = datetime.strptime(date_str, "%Y%m%d")
+        except ValueError:
+            continue
+
+        if month_start <= file_date <= month_end:
+            content = analysis_path.read_text()
+            # Calculate week boundaries for better labeling
+            week_start, week_end = _get_week_boundaries(file_date)
+            week_label = f"{week_start.strftime('%B %d')} - {week_end.strftime('%B %d, %Y')}"
+            collected_analyses.append(f"## Week of {week_label}\n\n{content}")
+
+    if not collected_analyses:
+        raise FileNotFoundError(
+            f"No weekly analysis files found for the month of "
+            f"{month_start.strftime('%B %Y')}"
+        )
+
+    combined_text = "\n\n---\n\n".join(collected_analyses)
+    month_label = month_start.strftime("%Y%m")
+    output_path = monthly_dir / f"{month_label}.month.txt"
+
+    return combined_text, output_path, month_start, month_end
+
+
+def _collect_monthly_analyses_gdrive_for_month(month_start: datetime, month_end: datetime) -> tuple[str, Path, datetime, datetime]:
+    """Collect monthly analyses from Google Drive for a specific month.
+
+    Args:
+        month_start: Start of month (first day)
+        month_end: End of month (last day)
+
+    Returns:
+        Tuple of (combined analysis text, virtual path, month start, month end)
+    """
+    from .config import LOCAL_OUTPUT_DIR
+    from .gdrive import GoogleDriveClient, parse_filename_datetime
+
+    client = GoogleDriveClient()
+    files = client.list_notes_files("weekly")
+
+    collected_analyses = []
+    for file_info in files:
+        filename = file_info["name"]
+        file_id = file_info["id"]
+
+        if ".weekly_analysis.txt" not in filename:
+            continue
+
+        file_date = parse_filename_datetime(filename)
+        if not file_date:
+            continue
+
+        if month_start <= file_date <= month_end:
+            content = client.download_file_text(file_id)
+            # Calculate week boundaries for better labeling
+            week_start, week_end = _get_week_boundaries(file_date)
+            week_label = f"{week_start.strftime('%B %d')} - {week_end.strftime('%B %d, %Y')}"
+            collected_analyses.append(f"## Week of {week_label}\n\n{content}")
+
+    if not collected_analyses:
+        raise FileNotFoundError(
+            f"No weekly analysis files found for the month of "
+            f"{month_start.strftime('%B %Y')}"
+        )
+
+    combined_text = "\n\n---\n\n".join(collected_analyses)
+    month_label = month_start.strftime("%Y%m")
+
+    # Use local output directory if configured
+    if LOCAL_OUTPUT_DIR:
+        monthly_dir = Path(LOCAL_OUTPUT_DIR) / "monthly"
+        monthly_dir.mkdir(parents=True, exist_ok=True)
+        output_path = monthly_dir / f"{month_label}.monthly_analysis.txt"
+    else:
+        # Virtual path for compatibility
+        output_path = Path(f"gdrive://monthly/{month_label}.monthly_analysis.txt")
+
+    return combined_text, output_path, month_start, month_end
+
+
+def _monthly_analysis_exists(month_start: datetime) -> bool:
+    """Check if a monthly analysis already exists for the given month.
+
+    Args:
+        month_start: First day of the month to check
+
+    Returns:
+        True if monthly analysis exists, False otherwise
+    """
+    source = get_active_source()
+    month_label = month_start.strftime("%Y%m")
+
+    if source == "gdrive":
+        from .gdrive import GoogleDriveClient
+        from .config import LOCAL_OUTPUT_DIR
+
+        # Check local output directory first
+        if LOCAL_OUTPUT_DIR:
+            analysis_path = Path(LOCAL_OUTPUT_DIR) / "monthly" / f"{month_label}.monthly_analysis.txt"
+            if analysis_path.exists():
+                return True
+
+        # Check Google Drive
+        client = GoogleDriveClient()
+        return client.file_exists("monthly", f"{month_label}.monthly_analysis.txt")
+    else:
+        # Check USB/local directory
+        monthly_dir = Path(USB_DIR) / "monthly"
+        if not monthly_dir.exists():
+            return False
+        analysis_path = monthly_dir / f"{month_label}.monthly_analysis.txt"
+        return analysis_path.exists()
+
+
+def _find_months_needing_analysis() -> list[tuple[datetime, datetime]]:
+    """Find all months that should have monthly analyses but don't.
+
+    A month needs analysis if:
+    1. It has 4+ weekly analyses (one for each week), OR
+    2. The calendar month has ended AND it has at least 1 weekly analysis
+
+    Returns:
+        List of tuples of (month_start, month_end) for months needing analysis
+    """
+    source = get_active_source()
+
+    # Collect all weekly analysis files and their dates
+    analysis_dates = []
+
+    if source == "gdrive":
+        from .gdrive import GoogleDriveClient, parse_filename_datetime
+        client = GoogleDriveClient()
+        files = client.list_notes_files("weekly")
+
+        for file_info in files:
+            filename = file_info["name"]
+            if ".weekly_analysis.txt" in filename:
+                file_date = parse_filename_datetime(filename)
+                if file_date:
+                    analysis_dates.append(file_date)
+    else:
+        weekly_dir = Path(USB_DIR) / "weekly"
+        if weekly_dir.exists():
+            for analysis_file in weekly_dir.glob("*.weekly_analysis.txt"):
+                file_date = _parse_filename_datetime(analysis_file.name)
+                if file_date:
+                    analysis_dates.append(file_date)
+
+    if not analysis_dates:
+        return []
+
+    # Group analyses by month
+    months_map = {}  # month_key -> month_data
+    for file_date in analysis_dates:
+        month_start, month_end = _get_month_boundaries(file_date)
+        month_key = month_start.strftime("%Y%m")
+
+        if month_key not in months_map:
+            months_map[month_key] = {
+                "start": month_start,
+                "end": month_end,
+                "dates": []
+            }
+        months_map[month_key]["dates"].append(file_date)
+
+    # Determine which months need analysis
+    months_needing_analysis = []
+    today = datetime.now()
+
+    for month_key, month_data in months_map.items():
+        month_start = month_data["start"]
+        month_end = month_data["end"]
+        dates = month_data["dates"]
+
+        # Skip if monthly analysis already exists
+        if _monthly_analysis_exists(month_start):
+            continue
+
+        # Condition 1: Has 4+ weekly analyses
+        if len(dates) >= 4:
+            months_needing_analysis.append((month_start, month_end))
+            continue
+
+        # Condition 2: Month has ended and has at least 1 analysis
+        if today > month_end and len(dates) > 0:
+            months_needing_analysis.append((month_start, month_end))
+
+    return months_needing_analysis
+
+
+def collect_monthly_analyses_for_month(month_start: datetime, month_end: datetime) -> tuple[str, Path, datetime, datetime]:
+    """Collect all weekly analysis files for a specific month.
+
+    Automatically selects between USB and Google Drive based on configuration.
+
+    Args:
+        month_start: Start of month (first day)
+        month_end: End of month (last day)
+
+    Returns:
+        Tuple of (combined analysis text, output path for monthly analysis,
+                  month start datetime, month end datetime)
+
+    Raises:
+        FileNotFoundError: If directories don't exist or no analyses found for the month
+    """
+    source = get_active_source()
+
+    if source == "gdrive":
+        return _collect_monthly_analyses_gdrive_for_month(month_start, month_end)
+    else:
+        return _collect_monthly_analyses_usb_for_month(month_start, month_end)
 
 
 def save_analysis(analysis: str, input_path: Path, notes_type: str = "daily") -> Path:

@@ -7,7 +7,7 @@ Uses Claude via LangChain to analyze task notes and generate execution plans.
 from langchain_anthropic import ChatAnthropic
 
 from .config import fetch_api_key, load_model_config, DEFAULT_MODEL
-from .prompts import get_daily_prompt, get_weekly_prompt
+from .prompts import get_daily_prompt, get_weekly_prompt, get_monthly_prompt
 
 
 def analyze_tasks(
@@ -19,12 +19,13 @@ def analyze_tasks(
     """Analyze task notes using Claude via LangChain.
 
     Args:
-        analysis_type: Type of analysis ("daily" or "weekly")
+        analysis_type: Type of analysis ("daily", "weekly", or "monthly")
         task_notes: The task notes to analyze
         api_key: Optional Anthropic API key (uses ANTHROPIC_API_KEY env var if not provided)
         **prompt_vars: Variables to inject into the prompt template
             - For daily: current_date (str)
             - For weekly: week_start (str), week_end (str)
+            - For monthly: month_start (str), month_end (str)
 
     Returns:
         The analysis and execution plan
@@ -42,7 +43,9 @@ def analyze_tasks(
     )
 
     # Get the appropriate prompt template
-    if analysis_type == "weekly":
+    if analysis_type == "monthly":
+        prompt = get_monthly_prompt()
+    elif analysis_type == "weekly":
         prompt = get_weekly_prompt()
     else:
         prompt = get_daily_prompt()
