@@ -1171,6 +1171,230 @@ def collect_monthly_analyses_for_month(month_start: datetime, month_end: datetim
         return _collect_monthly_analyses_usb_for_month(month_start, month_end)
 
 
+# =============================================================================
+# Annual Analysis Collection Functions
+# =============================================================================
+
+def _collect_annual_analyses_usb_for_year(year: int) -> tuple[str, Path, int]:
+    """Collect all monthly analyses from USB/local directory for a specific year.
+
+    Args:
+        year: The calendar year to collect (e.g., 2025)
+
+    Returns:
+        Tuple of (combined analysis text, output path, year)
+    """
+    base_dir = Path(USB_DIR)
+
+    if not base_dir.exists():
+        raise FileNotFoundError(f"USB directory not found: {USB_DIR}")
+
+    monthly_dir = base_dir / "monthly"
+    annual_dir = base_dir / "annual"
+
+    if not monthly_dir.exists():
+        raise FileNotFoundError(f"monthly directory not found: {monthly_dir}")
+
+    annual_dir.mkdir(exist_ok=True)
+
+    # Find all monthly_analysis files from the specified year
+    analysis_files = sorted(monthly_dir.glob("*.monthly_analysis.txt"))
+
+    collected_analyses = []
+    for analysis_path in analysis_files:
+        try:
+            date_str = analysis_path.stem.split(".")[0]
+            file_year = int(date_str[:4])
+            file_month = int(date_str[4:6])
+        except (ValueError, IndexError):
+            continue
+
+        if file_year == year:
+            content = analysis_path.read_text()
+            # Format month name for better labeling
+            month_date = datetime(year, file_month, 1)
+            month_label = month_date.strftime("%B")
+            collected_analyses.append(f"## {month_label} {year}\n\n{content}")
+
+    if not collected_analyses:
+        raise FileNotFoundError(f"No monthly analysis files found for year {year}")
+
+    combined_text = "\n\n---\n\n".join(collected_analyses)
+    output_path = annual_dir / f"{year}.annual.txt"
+
+    return combined_text, output_path, year
+
+
+def _collect_annual_analyses_gdrive_for_year(year: int) -> tuple[str, Path, int]:
+    """Collect all monthly analyses from Google Drive for a specific year.
+
+    Args:
+        year: The calendar year to collect (e.g., 2025)
+
+    Returns:
+        Tuple of (combined analysis text, virtual path, year)
+    """
+    from .config import LOCAL_OUTPUT_DIR
+    from .gdrive import GoogleDriveClient, parse_filename_datetime
+
+    client = GoogleDriveClient()
+    files = client.list_notes_files("monthly")
+
+    collected_analyses = []
+    for file_info in files:
+        filename = file_info["name"]
+        file_id = file_info["id"]
+
+        if ".monthly_analysis.txt" not in filename:
+            continue
+
+        file_date = parse_filename_datetime(filename)
+        if not file_date or file_date.year != year:
+            continue
+
+        content = client.download_file_text(file_id)
+        month_label = file_date.strftime("%B")
+        collected_analyses.append(f"## {month_label} {year}\n\n{content}")
+
+    if not collected_analyses:
+        raise FileNotFoundError(f"No monthly analysis files found for year {year}")
+
+    combined_text = "\n\n---\n\n".join(collected_analyses)
+
+    # Use local output directory if configured
+    if LOCAL_OUTPUT_DIR:
+        annual_dir = Path(LOCAL_OUTPUT_DIR) / "annual"
+        annual_dir.mkdir(parents=True, exist_ok=True)
+        output_path = annual_dir / f"{year}.annual_analysis.txt"
+    else:
+        # Virtual path for compatibility
+        output_path = Path(f"gdrive://annual/{year}.annual_analysis.txt")
+
+    return combined_text, output_path, year
+
+
+def _annual_analysis_exists(year: int) -> bool:
+    """Check if an annual analysis already exists for the given year.
+
+    Args:
+        year: The calendar year to check
+
+    Returns:
+        True if annual analysis exists, False otherwise
+    """
+    source = get_active_source()
+
+    if source == "gdrive":
+        from .gdrive import GoogleDriveClient
+        from .config import LOCAL_OUTPUT_DIR
+
+        # Check local output directory first
+        if LOCAL_OUTPUT_DIR:
+            analysis_path = Path(LOCAL_OUTPUT_DIR) / "annual" / f"{year}.annual_analysis.txt"
+            if analysis_path.exists():
+                return True
+
+        # Check Google Drive
+        client = GoogleDriveClient()
+        return client.file_exists("annual", f"{year}.annual_analysis.txt")
+    else:
+        # Check USB/local directory
+        annual_dir = Path(USB_DIR) / "annual"
+        if not annual_dir.exists():
+            return False
+        analysis_path = annual_dir / f"{year}.annual_analysis.txt"
+        return analysis_path.exists()
+
+
+def _find_years_needing_analysis() -> list[int]:
+    """Find all years that should have annual analyses but don't.
+
+    A year needs analysis if:
+    1. It has 12 monthly analyses, OR
+    2. The calendar year has ended AND it has at least 1 monthly analysis
+
+    Returns:
+        List of years (as integers) needing analysis
+    """
+    source = get_active_source()
+
+    # Collect all monthly analysis files and their years
+    analysis_years = {}  # year -> count
+
+    try:
+        if source == "gdrive":
+            from .gdrive import GoogleDriveClient, parse_filename_datetime
+            client = GoogleDriveClient()
+            files = client.list_notes_files("monthly")
+
+            for file_info in files:
+                filename = file_info["name"]
+                if ".monthly_analysis.txt" in filename:
+                    file_date = parse_filename_datetime(filename)
+                    if file_date:
+                        year = file_date.year
+                        analysis_years[year] = analysis_years.get(year, 0) + 1
+        else:
+            monthly_dir = Path(USB_DIR) / "monthly"
+            if monthly_dir.exists():
+                for analysis_file in monthly_dir.glob("*.monthly_analysis.txt"):
+                    try:
+                        date_str = analysis_file.stem.split(".")[0]
+                        year = int(date_str[:4])
+                        analysis_years[year] = analysis_years.get(year, 0) + 1
+                    except (ValueError, IndexError):
+                        continue
+    except FileNotFoundError:
+        # If monthly directory/folder doesn't exist yet, no annual analyses needed
+        return []
+
+    if not analysis_years:
+        return []
+
+    # Determine which years need analysis
+    years_needing_analysis = []
+    today = datetime.now()
+
+    for year, count in analysis_years.items():
+        # Skip if annual analysis already exists
+        if _annual_analysis_exists(year):
+            continue
+
+        # Condition 1: Has 12 monthly analyses
+        if count >= 12:
+            years_needing_analysis.append(year)
+            continue
+
+        # Condition 2: Year has ended and has at least 1 analysis
+        year_end = datetime(year, 12, 31, 23, 59, 59)
+        if today > year_end and count > 0:
+            years_needing_analysis.append(year)
+
+    return sorted(years_needing_analysis)
+
+
+def collect_annual_analyses_for_year(year: int) -> tuple[str, Path, int]:
+    """Collect all monthly analysis files for a specific year.
+
+    Automatically selects between USB and Google Drive based on configuration.
+
+    Args:
+        year: The calendar year to collect (e.g., 2025)
+
+    Returns:
+        Tuple of (combined analysis text, output path for annual analysis, year)
+
+    Raises:
+        FileNotFoundError: If directories don't exist or no analyses found for the year
+    """
+    source = get_active_source()
+
+    if source == "gdrive":
+        return _collect_annual_analyses_gdrive_for_year(year)
+    else:
+        return _collect_annual_analyses_usb_for_year(year)
+
+
 def save_analysis(analysis: str, input_path: Path, notes_type: str = "daily") -> Path:
     """Save the analysis output to a file.
 

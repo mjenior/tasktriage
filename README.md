@@ -2,15 +2,16 @@
 
 TaskTriage - ethically sourced optimism for your productivity.
 
-You know that feeling when you write a beautiful handwritten to-do list and then... don't know what to do first, or worse don't actually do any of it? This CLI tool uses Claude AI to turn your handwritten task notes into realistic, actionable execution plans based on GTD principles. Think of it as a reality check for your optimistic planning habits.
+You know that feeling when you write a great handwritten to-do list and then... don't know what to do first, or worse don't actually do any of it? This CLI tool uses Claude AI to turn your handwritten task notes into realistic, actionable execution plans based on GTD principles. Think of it as a reality check for your optimistic planning habits.
 
 ## Overview
 
-Here's the deal: you write your tasks on a note-taking device (reMarkable, Supernote, etc.). Those notes get synced to either a mounted drive or Google Drive. TaskTriage then swoops in, finds your latest scribbles, and uses Claude AI (via LangChain) to do three things:
+Here's the deal: you write your tasks on a note-taking device (reMarkable, Supernote, etc.). Those notes get synced to either a mounted drive or Google Drive. TaskTriage then swoops in, finds your latest scribbles, and uses Claude AI (via LangChain) to do four things:
 
 - **Daily Analysis**: Takes your categorized to-do list and transforms it into an actual realistic plan for a single day. You get time estimates, energy levels, and prioritized action steps. No more pretending you can do 47 things in one afternoon.
 - **Weekly Analysis**: Looks back at your week's worth of daily plans to spot patterns, figure out where things went sideways, and generate strategies to fix your planning approach. It's like a retrospective, but with less corporate speak.
 - **Monthly Analysis**: Synthesizes your entire month's worth of weekly analyses to identify long-term patterns, assess strategic accomplishments, and craft high-level guidance for next month's planning and execution strategy.
+- **Annual Analysis**: Analyzes all 12 months of strategic insights to identify year-long accomplishments, skill development, and high-impact opportunities for the year ahead.
 
 ## Features
 
@@ -20,9 +21,10 @@ Here's the deal: you write your tasks on a note-taking device (reMarkable, Super
 - Works with local/USB directories or Google Drive (your choice)
 - Tweak Claude's model parameters via a simple YAML file
 - GTD-based prioritization with built-in workload guardrails that cap you at 6-7 hours of focused work per day (because burnout is bad, actually)
-- **Temporal hierarchy**: Daily → Weekly → Monthly, with automatic analysis triggering at each level
+- **Temporal hierarchy**: Daily → Weekly → Monthly → Annual, with automatic analysis triggering at each level
 - Auto-triggers weekly analyses when you have 5+ weekday analyses or when the work week has passed
 - Auto-triggers monthly analyses when you have 4+ weekly analyses or when the calendar month has ended
+- Auto-triggers annual analyses when you have 12 monthly analyses or when the calendar year has ended with at least 1 monthly analysis
 - Shell alias so you can just type `triage` instead of the full command
 
 ## Requirements
@@ -157,7 +159,7 @@ Don't lose this file. You can't re-download it.
 ### 5. Set Up Your Google Drive Folder
 
 1. Create a folder in Google Drive for your notes (call it whatever you want, maybe "TaskTriageNotes")
-2. Inside that folder, create two subfolders: `daily` and `weekly`
+2. Inside that folder, create subfolders: `daily`, `weekly`, `monthly`, and `annual`
 3. **Here's the critical part**: Share the parent folder with your service account
    - Right-click the folder → "Share"
    - Add the service account email (it's in the JSON file you downloaded, labeled `client_email`—looks like `name@project-id.iam.gserviceaccount.com`)
@@ -199,7 +201,7 @@ After you've configured your `.env` file, run this to create the output director
 task setup:output-dir
 ```
 
-This creates the `daily/`, `weekly/`, and `monthly/` subdirectories inside your `LOCAL_OUTPUT_DIR`.
+This creates the `daily/`, `weekly/`, `monthly/`, and `annual/` subdirectories inside your `LOCAL_OUTPUT_DIR`.
 
 ### Important: Service Account Limitations
 
@@ -234,8 +236,10 @@ LOCAL_OUTPUT_DIR/
 │   └── 20251225_074353.daily_analysis.txt  # Generated analysis
 ├── weekly/
 │   └── 20251223.weekly_analysis.txt        # Generated weekly analysis
-└── monthly/
-    └── 202512.monthly_analysis.txt        # Generated monthly analysis
+├── monthly/
+│   └── 202512.monthly_analysis.txt         # Generated monthly analysis
+└── annual/
+    └── 2025.annual_analysis.txt            # Generated annual analysis
 ```
 
 ## Notes Directory Structure
@@ -252,8 +256,11 @@ notes/
 ├── weekly/
 │   ├── 20251223.weekly_analysis.txt     # Generated weekly analysis
 │   └── ...
-└── monthly/
-    └── ...
+├── monthly/
+│   ├── 202512.monthly_analysis.txt      # Generated monthly analysis
+│   └── ...
+└── annual/
+    └── 2025.annual_analysis.txt         # Generated annual analysis
 ```
 
 ### Supported File Formats
@@ -347,6 +354,19 @@ When triggered:
 4. Saves to `Notes/monthly/{month_label}.monthly_analysis.txt`
 5. Prints: `Monthly Summary: X successful, Y failed`
 
+**LEVEL 4: Annual Analysis (auto-triggers when conditions are met)**
+
+After all monthly analyses complete, TaskTriage checks if any years need analysis. An annual analysis is triggered automatically when:
+- **12 monthly analyses exist** for a calendar year, OR
+- **The calendar year has ended** and at least 1 monthly analysis exists for that year
+
+When triggered:
+1. Collects all monthly analysis files from the qualifying year
+2. Combines them with month labels
+3. Generates a comprehensive annual analysis synthesizing year-long accomplishments, learning, and strategic opportunities
+4. Saves to `Notes/annual/{year}.annual_analysis.txt`
+5. Prints: `Annual Summary: X successful, Y failed`
+
 You don't have to trigger any of these manually—TaskTriage handles the entire hierarchy automatically!
 
 ## Daily Analysis Output
@@ -385,6 +405,17 @@ The monthly analysis synthesizes your entire month to show you:
 
 Monthly analyses are **strategic level**, not tactical. They reveal patterns invisible at the weekly level and help you understand your actual productivity rhythms over time.
 
+## Annual Analysis Output
+
+The annual analysis synthesizes your entire year to show you:
+
+- **Year in accomplishments**: Your major wins and achievements across the full calendar year, organized by category and impact
+- **Learning & skill development**: Areas where you've grown professionally and personally throughout the year, plus knowledge gaps revealed
+- **Highest-impact opportunities**: 2-4 specific improvements that would generate the most leverage in the year ahead, ranked by ROI
+- **Year-ahead strategic direction**: Recommendations for next year's focus areas, capacity planning, and systemic changes based on what you learned
+
+Annual analyses are **strategic and retrospective**. They help you see the big picture—what you actually accomplished beyond the day-to-day grind, and what's worth focusing on next year. This is where you look back at the full story of your year, not just individual months.
+
 ## Directory Structure
 
 TaskTriage organizes your analyses in a clear hierarchy:
@@ -399,8 +430,11 @@ Notes/
 ├── weekly/
 │   ├── 20251223.weekly_analysis.txt           # Week of Dec 23-27
 │   └── 20251230.weekly_analysis.txt           # Week of Dec 30-Jan 3
-└── monthly/
-    └── 202512.monthly_analysis.txt            # December 2025 synthesis
+├── monthly/
+│   ├── 202512.monthly_analysis.txt            # December 2025 synthesis
+│   └── 202511.monthly_analysis.txt            # November 2025 synthesis
+└── annual/
+    └── 2025.annual_analysis.txt               # Full year 2025 synthesis
 ```
 
 Filename formats:
@@ -408,6 +442,7 @@ Filename formats:
 - **Daily analyses**: `YYYYMMDD_HHMMSS.daily_analysis.txt`
 - **Weekly analyses**: `YYYYMMDD.weekly_analysis.txt` (date is Monday of that week)
 - **Monthly analyses**: `YYYYMM.monthly_analysis.txt` (e.g., `202512.monthly_analysis.txt` for December 2025)
+- **Annual analyses**: `YYYY.annual_analysis.txt` (e.g., `2025.annual_analysis.txt` for full year 2025)
 
 ## Task Commands
 
@@ -531,10 +566,12 @@ from tasktriage import (
     get_daily_prompt,
     get_weekly_prompt,
     get_monthly_prompt,
+    get_annual_prompt,
     load_task_notes,
     load_all_unanalyzed_task_notes,
     collect_weekly_analyses_for_week,
     collect_monthly_analyses_for_month,
+    collect_annual_analyses_for_year,
     extract_text_from_image,
     GoogleDriveClient,
     get_notes_source,
@@ -553,6 +590,9 @@ print(weekly_prompt.input_variables)  # ['week_start', 'week_end', 'task_notes']
 monthly_prompt = get_monthly_prompt()
 print(monthly_prompt.input_variables)  # ['month_start', 'month_end', 'task_notes']
 
+annual_prompt = get_annual_prompt()
+print(annual_prompt.input_variables)  # ['year', 'task_notes']
+
 # Load all unanalyzed daily notes
 unanalyzed = load_all_unanalyzed_task_notes("daily", "png")
 for content, path, date in unanalyzed:
@@ -563,6 +603,9 @@ from datetime import datetime
 month_start = datetime(2025, 12, 1)
 month_end = datetime(2025, 12, 31)
 monthly_content, output_path, ms, me = collect_monthly_analyses_for_month(month_start, month_end)
+
+# Collect annual analyses for a specific year
+annual_content, output_path, year = collect_annual_analyses_for_year(2025)
 
 # Use the Google Drive client directly
 client = GoogleDriveClient()

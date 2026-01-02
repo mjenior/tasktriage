@@ -206,6 +206,48 @@ def main():
             print(f"Monthly Summary: {monthly_successful} successful, {monthly_failed} failed")
             print(f"{'='*50}")
 
+        # =================================================================
+        # LEVEL 4: ANNUAL ANALYSES (only if monthly analyses completed)
+        # =================================================================
+        # Only proceed to annual if we have monthly analyses (either existing or just created)
+        # This ensures the temporal hierarchy: daily → weekly → monthly → annual
+
+        from .files import _find_years_needing_analysis, collect_annual_analyses_for_year
+        years_to_analyze = _find_years_needing_analysis()
+
+        annual_successful = 0
+        annual_failed = 0
+
+        if years_to_analyze:
+            print(f"\n{'='*50}")
+            print(f"Auto-triggering annual analyses")
+            print(f"  (based on completed monthly analyses)")
+            print(f"{'='*50}\n")
+
+            for year in years_to_analyze:
+                try:
+                    print(f"Analyzing year: {year}")
+
+                    # Collect and analyze
+                    task_notes, notes_path, yr = collect_annual_analyses_for_year(year)
+
+                    prompt_vars = {
+                        "year": str(year),
+                    }
+
+                    result = analyze_tasks("annual", task_notes, **prompt_vars)
+                    output_path = save_analysis(result, notes_path, "annual")
+
+                    print(f"  ✓ Annual analysis saved to: {output_path}\n")
+                    annual_successful += 1
+                except Exception as e:
+                    print(f"  ✗ Failed: {e}\n")
+                    annual_failed += 1
+
+            print(f"{'='*50}")
+            print(f"Annual Summary: {annual_successful} successful, {annual_failed} failed")
+            print(f"{'='*50}")
+
         # Exit with error if any daily analyses failed
         if daily_failed > 0:
             sys.exit(1)
