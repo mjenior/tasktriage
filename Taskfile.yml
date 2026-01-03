@@ -81,7 +81,8 @@ tasks:
         echo "  1. Edit .env with your API key and notes source configuration"
         echo "  2. Run 'source .venv/bin/activate' to activate the virtual environment"
         echo "  3. Run 'task setup:output-dir' to create the analysis output directory"
-        echo "  4. Run 'task alias' to add shell shortcuts (optional)"
+        echo "  4. Run 'uv tool install bump-my-version' to install the version bump tool"
+        echo "  5. Run 'task alias' to add shell shortcuts (optional)"
 
   test:
     desc: Run tests
@@ -119,3 +120,27 @@ tasks:
     deps: [clean]
     cmds:
       - rm -rf .venv/ uv.lock
+
+  bump:
+    desc: Show version bump options
+    cmds:
+      - |
+        echo "Version bump commands:"
+        echo "  task bump:patch    - Bump patch version (e.g. 0.1.1 → 0.1.2)"
+        echo "  task bump:minor    - Bump minor version (e.g. 0.1.1 → 0.2.0)"
+        echo "  task bump:major    - Bump major version (e.g. 0.1.1 → 1.0.0)"
+
+  bump:patch:
+    desc: Bump patch version and create git tag
+    cmds:
+      - bump-my-version bump patch
+
+  bump:minor:
+    desc: Bump minor version and create git tag
+    cmds:
+      - bump-my-version bump minor
+
+  bump:major:
+    desc: Bump major version and create git tag
+    cmds:
+      - bump-my-version bump major
