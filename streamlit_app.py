@@ -25,9 +25,12 @@ from tasktriage import (
     save_analysis,
     get_notes_source,
     is_usb_available,
+    is_local_input_available,
     is_gdrive_available,
     get_active_source,
-    USB_DIR,
+    get_primary_input_directory,
+    USB_INPUT_DIR,
+    LOCAL_INPUT_DIR,
     CONFIG_PATH,
     IMAGE_EXTENSIONS,
 )
@@ -35,6 +38,8 @@ from tasktriage.files import (
     _find_weeks_needing_analysis,
     _find_months_needing_analysis,
     _find_years_needing_analysis,
+    raw_text_exists,
+    save_raw_text,
 )
 
 # Page configuration
@@ -197,11 +202,12 @@ st.markdown("""
 
 
 def get_notes_directory() -> Path | None:
-    """Get the active notes directory path."""
+    """Get the primary notes directory path."""
     try:
         source = get_notes_source()
-        if source == "usb" and USB_DIR:
-            return Path(USB_DIR)
+        if source == "usb":
+            # Returns the primary input directory (USB_INPUT_DIR or LOCAL_INPUT_DIR)
+            return get_primary_input_directory()
         elif source == "gdrive":
             # For Google Drive, we need LOCAL_OUTPUT_DIR or return None
             local_output = os.getenv("LOCAL_OUTPUT_DIR")
@@ -334,6 +340,31 @@ def save_file_content(file_path: Path, content: str) -> bool:
         return False
 
 
+def create_new_notes_file(notes_dir: Path) -> Path | None:
+    """Create a new empty notes file with timestamp-based name.
+
+    Args:
+        notes_dir: The base notes directory
+
+    Returns:
+        Path to the created file, or None if creation failed
+    """
+    daily_dir = notes_dir / "daily"
+    daily_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate timestamp-based filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    new_file = daily_dir / f"{timestamp}.txt"
+
+    try:
+        # Create empty file
+        new_file.write_text("", encoding="utf-8")
+        return new_file
+    except Exception as e:
+        st.error(f"Error creating file: {e}")
+        return None
+
+
 def load_env_config() -> dict:
     """Load configuration from .env file."""
     env_path = Path(__file__).parent / ".env"
@@ -377,16 +408,29 @@ def save_yaml_config(config: dict) -> bool:
 
 
 def analyze_single_file(task_notes: str, notes_path: Path, file_date: datetime, notes_type: str) -> tuple:
-    """Analyze a single task notes file."""
+    """Analyze a single task notes file.
+
+    For PNG files, also saves the raw extracted text to a .raw_notes.txt file
+    in parallel with the analysis. This preserves the original text with any
+    completion markers (✓, ✗, ☆) for display in the UI text editor.
+    """
     try:
+        # If this is a PNG file, save the raw extracted text (if not already saved)
+        # This runs in parallel with the analysis - text is already extracted
+        raw_text_path = None
+        if notes_path.suffix.lower() in IMAGE_EXTENSIONS:
+            if not raw_text_exists(notes_path):
+                raw_text_path = save_raw_text(task_notes, notes_path)
+
+        # Run the analysis
         prompt_vars = {
             "current_date": file_date.strftime("%A, %B %d, %Y"),
         }
         result = analyze_tasks(notes_type, task_notes, **prompt_vars)
         output_path = save_analysis(result, notes_path, notes_type)
-        return (notes_path, output_path, True, None)
+        return (notes_path, output_path, True, None, raw_text_path)
     except Exception as e:
-        return (notes_path, None, False, str(e))
+        return (notes_path, None, False, str(e), None)
 
 
 def run_triage_pipeline(progress_callback) -> dict:
@@ -420,12 +464,15 @@ def run_triage_pipeline(progress_callback) -> dict:
 
             completed = 0
             for future in as_completed(future_to_file):
-                notes_path, output_path, success, error_msg = future.result()
+                notes_path, output_path, success, error_msg, raw_text_path = future.result()
                 completed += 1
 
                 if success:
                     results["daily"]["successful"] += 1
-                    progress_callback(f"Processing daily notes... ({completed}/{total_files}) - {notes_path.name}")
+                    msg = f"Processing daily notes... ({completed}/{total_files}) - {notes_path.name}"
+                    if raw_text_path:
+                        msg += " (+ raw text)"
+                    progress_callback(msg)
                 else:
                     results["daily"]["failed"] += 1
                     results["daily"]["errors"].append(f"{notes_path.name}: {error_msg}")
@@ -538,20 +585,48 @@ if "triage_running" not in st.session_state:
     st.session_state.triage_running = False
 if "show_config" not in st.session_state:
     st.session_state.show_config = False
+if "raw_notes_selection" not in st.session_state:
+    st.session_state.raw_notes_selection = None
+if "analysis_files_selection" not in st.session_state:
+    st.session_state.analysis_files_selection = None
 
 
 def select_file(file_path: Path):
     """Handle file selection."""
+    # Only reset editor content if we're switching to a DIFFERENT file
+    # This prevents losing unsaved changes when the app reruns
+    is_new_file = st.session_state.selected_file != file_path
+
     st.session_state.selected_file = file_path
     content = load_file_content(file_path)
     st.session_state.file_content = content
     st.session_state.original_content = content
 
+    # Only reset the editor content when actually switching files
+    if is_new_file:
+        st.session_state.content_editor = content
+
+
+HELP_TEXT = """TaskTriage uses Claude AI to turn your handwritten task notes into realistic, actionable execution plans based on GTD principles. Think of it as a reality check for your optimistic planning habits.
+
+**Left Panel (Controls)**
+- **Analyze Button** - Run the full analysis pipeline with real-time progress updates
+- **Configuration** - Edit `.env` and `config.yaml` settings directly in the browser (API keys, notes source, model parameters)
+- **Raw Notes List** - Browse `.txt` and image files from your `daily/` directory, sorted by date
+- **Analysis Files List** - Browse all generated analysis files across daily/weekly/monthly/annual
+
+**Right Panel (Editor)**
+- Full-height text editor for viewing and editing selected files
+- Image preview for handwritten note images
+- Save/Revert buttons with unsaved changes indicator
+- Notes source status display
+- **Quick Markup Tools** - Add task markers to clipboard (✓ completed, ✗ removed, ☆ urgent). These are automatically interpretted at the right side of each line.
+"""
 
 def main():
     """Main application entry point."""
     # Header
-    st.markdown("# 📋 TaskTriage")
+    st.markdown("# 📋 TaskTriage", help=HELP_TEXT)
 
     # Get notes directory
     notes_dir = get_notes_directory()
@@ -569,102 +644,108 @@ def main():
         st.markdown('<p class="section-header">Actions</p>', unsafe_allow_html=True)
 
         triage_disabled = st.session_state.triage_running or notes_dir is None
-        if st.button("🔍 Triage", type="primary", disabled=triage_disabled, use_container_width=True):
+        if st.button("🔍 Analyze", type="primary", disabled=triage_disabled, use_container_width=True, key="btn_triage"):
             st.session_state.triage_running = True
             st.session_state.triage_progress = []
             st.rerun()
 
-        # Configuration button
-        if st.button("⚙️ Configuration", use_container_width=True):
-            st.session_state.show_config = not st.session_state.show_config
-            st.rerun()
+        with st.expander("Configuration", expanded=False):
+            env_config = load_env_config()
+            yaml_config = load_yaml_config()
 
-        # Configuration expander
-        if st.session_state.show_config:
-            with st.expander("Configuration", expanded=True):
-                env_config = load_env_config()
-                yaml_config = load_yaml_config()
+            st.markdown("**Environment Variables**")
 
-                st.markdown("**Environment Variables**")
+            api_key = st.text_input(
+                "ANTHROPIC_API_KEY",
+                value=env_config.get("ANTHROPIC_API_KEY", ""),
+                type="password"
+            )
 
-                api_key = st.text_input(
-                    "ANTHROPIC_API_KEY",
-                    value=env_config.get("ANTHROPIC_API_KEY", ""),
-                    type="password"
-                )
+            notes_source = st.selectbox(
+                "NOTES_SOURCE",
+                options=["auto", "usb", "gdrive"],
+                index=["auto", "usb", "gdrive"].index(env_config.get("NOTES_SOURCE", "auto"))
+            )
 
-                notes_source = st.selectbox(
-                    "NOTES_SOURCE",
-                    options=["auto", "usb", "gdrive"],
-                    index=["auto", "usb", "gdrive"].index(env_config.get("NOTES_SOURCE", "auto"))
-                )
+            st.markdown("**Input Directories**")
 
-                usb_dir = st.text_input(
-                    "USB_DIR",
-                    value=env_config.get("USB_DIR", "")
-                )
+            usb_input_dir = st.text_input(
+                "USB_INPUT_DIR",
+                value=env_config.get("USB_INPUT_DIR", env_config.get("USB_DIR", "")),  # Backward compat
+                help="Path to USB/mounted device notes directory"
+            )
 
-                gdrive_folder = st.text_input(
-                    "GOOGLE_DRIVE_FOLDER_ID",
-                    value=env_config.get("GOOGLE_DRIVE_FOLDER_ID", "")
-                )
+            local_input_dir = st.text_input(
+                "LOCAL_INPUT_DIR",
+                value=env_config.get("LOCAL_INPUT_DIR", ""),
+                help="Path to local hard drive notes directory (optional)"
+            )
 
-                local_output = st.text_input(
-                    "LOCAL_OUTPUT_DIR",
-                    value=env_config.get("LOCAL_OUTPUT_DIR", "")
-                )
+            st.markdown("**Google Drive**")
 
-                st.markdown("**Model Configuration**")
+            gdrive_folder = st.text_input(
+                "GOOGLE_DRIVE_FOLDER_ID",
+                value=env_config.get("GOOGLE_DRIVE_FOLDER_ID", "")
+            )
 
-                model = st.text_input(
-                    "Model",
-                    value=yaml_config.get("model", "claude-haiku-4-5-20251001")
-                )
+            local_output = st.text_input(
+                "LOCAL_OUTPUT_DIR",
+                value=env_config.get("LOCAL_OUTPUT_DIR", ""),
+                help="Local directory for saving analysis output"
+            )
 
-                temperature = st.slider(
-                    "Temperature",
-                    min_value=0.0,
-                    max_value=1.0,
-                    value=float(yaml_config.get("temperature", 0.7)),
-                    step=0.1
-                )
+            st.markdown("**Model Configuration**")
 
-                max_tokens = st.number_input(
-                    "Max Tokens",
-                    min_value=256,
-                    max_value=16384,
-                    value=int(yaml_config.get("max_tokens", 4096)),
-                    step=256
-                )
+            model = st.text_input(
+                "Model",
+                value=yaml_config.get("model", "claude-haiku-4-5-20251001")
+            )
 
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("Save", type="primary"):
-                        # Save env config
-                        new_env = {
-                            "ANTHROPIC_API_KEY": api_key,
-                            "NOTES_SOURCE": notes_source,
-                            "USB_DIR": usb_dir,
-                            "GOOGLE_DRIVE_FOLDER_ID": gdrive_folder,
-                            "LOCAL_OUTPUT_DIR": local_output,
-                        }
-                        save_env_config(new_env)
+            temperature = st.slider(
+                "Temperature",
+                min_value=0.0,
+                max_value=1.0,
+                value=float(yaml_config.get("temperature", 0.7)),
+                step=0.1
+            )
 
-                        # Save yaml config
-                        new_yaml = {
-                            "model": model,
-                            "temperature": temperature,
-                            "max_tokens": max_tokens,
-                        }
-                        save_yaml_config(new_yaml)
+            max_tokens = st.number_input(
+                "Max Tokens",
+                min_value=256,
+                max_value=16384,
+                value=int(yaml_config.get("max_tokens", 4096)),
+                step=256
+            )
 
-                        st.success("Configuration saved!")
-                        st.rerun()
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Save", type="primary", key="btn_save_config"):
+                    # Save env config
+                    new_env = {
+                        "ANTHROPIC_API_KEY": api_key,
+                        "NOTES_SOURCE": notes_source,
+                        "USB_INPUT_DIR": usb_input_dir,
+                        "LOCAL_INPUT_DIR": local_input_dir,
+                        "GOOGLE_DRIVE_FOLDER_ID": gdrive_folder,
+                        "LOCAL_OUTPUT_DIR": local_output,
+                    }
+                    save_env_config(new_env)
 
-                with col2:
-                    if st.button("Cancel"):
-                        st.session_state.show_config = False
-                        st.rerun()
+                    # Save yaml config
+                    new_yaml = {
+                        "model": model,
+                        "temperature": temperature,
+                        "max_tokens": max_tokens,
+                    }
+                    save_yaml_config(new_yaml)
+
+                    st.success("Configuration saved!")
+                    st.rerun()
+
+            with col2:
+                if st.button("Cancel", key="btn_cancel_config"):
+                    st.session_state.show_config = False
+                    st.rerun()
 
         st.markdown("---")
 
@@ -674,22 +755,42 @@ def main():
         if notes_dir:
             raw_notes = list_raw_notes(notes_dir)
             if raw_notes:
+                # Set default selection if not set
+                if st.session_state.raw_notes_selection is None and raw_notes:
+                    st.session_state.raw_notes_selection = raw_notes[0][0]
+
                 selected_raw = st.selectbox(
                     "Select a raw note file",
                     options=[f[0] for f in raw_notes],
                     format_func=lambda x: next((f[1] for f in raw_notes if f[0] == x), x.name),
                     key="raw_notes_select",
-                    label_visibility="collapsed"
+                    label_visibility="collapsed",
+                    index=[f[0] for f in raw_notes].index(st.session_state.raw_notes_selection) if st.session_state.raw_notes_selection in [f[0] for f in raw_notes] else 0
                 )
-                if selected_raw and selected_raw != st.session_state.selected_file:
-                    select_file(selected_raw)
-                    st.rerun()
+                st.session_state.raw_notes_selection = selected_raw
+
+                btn_col1, btn_col2 = st.columns(2)
+                with btn_col1:
+                    if st.button("📂 Open", use_container_width=True, key="btn_render_raw"):
+                        select_file(selected_raw)
+                        st.rerun()
+                with btn_col2:
+                    if st.button("📝 New", use_container_width=True, key="btn_new_raw"):
+                        new_file = create_new_notes_file(notes_dir)
+                        if new_file:
+                            st.session_state.raw_notes_selection = new_file
+                            select_file(new_file)
+                            st.rerun()
             else:
                 st.info("No raw notes found in daily/ directory")
+                if st.button("📝 New", use_container_width=True, key="btn_new_raw_empty"):
+                    new_file = create_new_notes_file(notes_dir)
+                    if new_file:
+                        st.session_state.raw_notes_selection = new_file
+                        select_file(new_file)
+                        st.rerun()
         else:
             st.info("Configure notes directory to see files")
-
-        st.markdown("---")
 
         # File Selection - Analysis Files
         st.markdown('<p class="section-header">Analysis Files</p>', unsafe_allow_html=True)
@@ -697,14 +798,21 @@ def main():
         if notes_dir:
             analysis_files = list_analysis_files(notes_dir)
             if analysis_files:
+                # Set default selection if not set
+                if st.session_state.analysis_files_selection is None and analysis_files:
+                    st.session_state.analysis_files_selection = analysis_files[0][0]
+
                 selected_analysis = st.selectbox(
                     "Select an analysis file",
                     options=[f[0] for f in analysis_files],
                     format_func=lambda x: next((f[1] for f in analysis_files if f[0] == x), x.name),
                     key="analysis_files_select",
-                    label_visibility="collapsed"
+                    label_visibility="collapsed",
+                    index=[f[0] for f in analysis_files].index(st.session_state.analysis_files_selection) if st.session_state.analysis_files_selection in [f[0] for f in analysis_files] else 0
                 )
-                if selected_analysis and selected_analysis != st.session_state.selected_file:
+                st.session_state.analysis_files_selection = selected_analysis
+
+                if st.button("📂 Open", use_container_width=True, key="btn_render_analysis"):
                     select_file(selected_analysis)
                     st.rerun()
             else:
@@ -712,26 +820,7 @@ def main():
         else:
             st.info("Configure notes directory to see files")
 
-        st.markdown("---")
-
-        # Quick Markup Tools
-        st.markdown('<p class="section-header">Quick Markup</p>', unsafe_allow_html=True)
-
-        markup_disabled = st.session_state.selected_file is None
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            if st.button("✓", disabled=markup_disabled, help="Add checkmark"):
-                if st.session_state.file_content:
-                    st.session_state.file_content = "✓ " + st.session_state.file_content
-        with col2:
-            if st.button("✗", disabled=markup_disabled, help="Add removal mark"):
-                if st.session_state.file_content:
-                    st.session_state.file_content = "✗ " + st.session_state.file_content
-        with col3:
-            if st.button("*", disabled=markup_disabled, help="Add urgent mark"):
-                if st.session_state.file_content:
-                    st.session_state.file_content = "* " + st.session_state.file_content
+        #--------------------------------------------------------------------#
 
         # Triage Progress
         if st.session_state.triage_running or st.session_state.triage_progress:
@@ -768,47 +857,72 @@ def main():
         if st.session_state.selected_file:
             file_path = st.session_state.selected_file
 
-            # Editor header
-            has_changes = st.session_state.file_content != st.session_state.original_content
-            status_class = "status-unsaved" if has_changes else "status-saved"
-            status_text = "Unsaved changes" if has_changes else "Saved"
-
-            header_col1, header_col2, header_col3 = st.columns([6, 1, 1])
-
-            with header_col1:
-                st.markdown(f"### 📄 {file_path.name}")
-                st.caption(f"Status: {status_text}")
-
-            with header_col2:
-                if st.button("Save", type="primary", disabled=not has_changes):
-                    if save_file_content(file_path, st.session_state.file_content):
-                        st.session_state.original_content = st.session_state.file_content
-                        st.success("Saved!")
-                        st.rerun()
-
-            with header_col3:
-                if st.button("Revert", disabled=not has_changes):
-                    st.session_state.file_content = st.session_state.original_content
-                    st.rerun()
-
-            st.markdown("---")
-
             # Check if it's an image file
             if file_path.suffix.lower() in {".png", ".jpg", ".jpeg", ".gif", ".webp"}:
+                # Image files - show header without edit controls
+                st.markdown(f"### 📄 {file_path.name}")
+                st.caption("Image file (read-only)")
+                st.markdown("---")
                 # Show image preview
                 render_image_preview(file_path)
             else:
-                # Text editor
-                new_content = st.text_area(
+                # Text files - show editor with controls
+                # Initialize content_editor in session state if needed
+                if "content_editor" not in st.session_state:
+                    st.session_state.content_editor = st.session_state.file_content
+
+                # Check for changes using the editor's session state
+                current_content = st.session_state.get("content_editor", st.session_state.file_content)
+                has_changes = current_content != st.session_state.original_content
+                status_text = "Unsaved changes" if has_changes else "Saved"
+
+                # Editor header with save/revert buttons
+                header_col1, header_col2, header_col3 = st.columns([5, 1.5, 1.5])
+
+                with header_col1:
+                    st.markdown(f"### 📄 {file_path.name}")
+                    st.caption(f"Status: {status_text}")
+
+                with header_col2:
+                    if st.button("💾 Save", type="primary", disabled=not has_changes, key="btn_save_file", use_container_width=True):
+                        content_to_save = st.session_state.content_editor
+                        if save_file_content(file_path, content_to_save):
+                            st.session_state.file_content = content_to_save
+                            st.session_state.original_content = content_to_save
+                            st.success("Saved!")
+                            st.rerun()
+
+                with header_col3:
+                    if st.button("↩️ Revert", disabled=not has_changes, key="btn_revert_file", use_container_width=True):
+                        st.session_state.content_editor = st.session_state.original_content
+                        st.session_state.file_content = st.session_state.original_content
+                        st.rerun()
+
+                # Quick Markup Tools
+                st.markdown('<p class="section-header">Quick Markup</p>', unsafe_allow_html=True)
+                st.caption("Copyable task markers (✓ Completed, ✗ Removed, ☆ Urgent)")
+
+                # Show markup text
+                col1, col2, col3 = st.columns(3, width=200)
+
+                with col1:
+                    st.code(" ✓", language=None)
+
+                with col2:
+                    st.code(" ✗", language=None)
+
+                with col3:
+                    st.code(" ☆", language=None)
+
+                # Text editor - uses content_editor session state key
+                # Don't pass 'value' when using 'key' - Streamlit manages it automatically
+                st.text_area(
                     "File content",
-                    value=st.session_state.file_content,
                     height=600,
                     key="content_editor",
                     label_visibility="collapsed"
                 )
-
-                if new_content != st.session_state.file_content:
-                    st.session_state.file_content = new_content
+                    
         else:
             # No file selected
             st.markdown("### Select a file to edit")
@@ -820,11 +934,19 @@ def main():
 
             try:
                 if is_usb_available():
-                    st.success(f"✓ USB/Local: {USB_DIR}")
+                    st.success(f"✓ USB Input: {USB_INPUT_DIR}")
                 else:
-                    st.warning("✗ USB/Local not configured")
+                    st.warning("✗ USB Input not configured")
             except Exception:
-                st.warning("✗ USB/Local not configured")
+                st.warning("✗ USB Input not configured")
+
+            try:
+                if is_local_input_available():
+                    st.success(f"✓ Local Input: {LOCAL_INPUT_DIR}")
+                else:
+                    st.info("Local Input not configured (optional)")
+            except Exception:
+                st.info("Local Input not configured (optional)")
 
             try:
                 if is_gdrive_available():

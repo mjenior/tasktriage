@@ -9,8 +9,19 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from .config import USB_DIR, get_active_source
+from .config import get_active_source, get_all_input_directories, get_primary_input_directory
 from .image import extract_text_from_image, IMAGE_EXTENSIONS
+
+# Backward compatibility: USB_DIR references the primary input directory
+# This allows existing code to work while we transition to multi-source reading
+def _get_usb_dir():
+    """Get the primary input directory (for backward compatibility with USB_DIR references)."""
+    try:
+        return str(get_primary_input_directory())
+    except ValueError:
+        return None
+
+USB_DIR = _get_usb_dir()
 
 # Supported text file extensions
 TEXT_EXTENSIONS = {".txt"}
@@ -76,8 +87,44 @@ def _parse_filename_datetime(filename: str) -> datetime | None:
 # USB/Local Directory Functions
 # =============================================================================
 
+def _needs_reanalysis_usb(notes_path: Path, analysis_path: Path) -> bool:
+    """Check if a notes file needs re-analysis because it was modified after its analysis.
+
+    This enables edited notes files to be re-analyzed, with the new analysis
+    replacing the old one.
+
+    Args:
+        notes_path: Path to the notes file (PNG or TXT)
+        analysis_path: Path to the existing analysis file
+
+    Returns:
+        True if the notes file (or its raw text version) was modified after the analysis
+    """
+    if not analysis_path.exists():
+        return False  # No analysis exists, so not a "re-analysis" case
+
+    analysis_mtime = analysis_path.stat().st_mtime
+
+    # Check if the notes file itself was modified after analysis
+    if notes_path.stat().st_mtime > analysis_mtime:
+        return True
+
+    # For image files, also check if the corresponding .raw_notes.txt was edited
+    if notes_path.suffix.lower() in IMAGE_EXTENSIONS:
+        timestamp = _extract_timestamp(notes_path.name)
+        if timestamp:
+            raw_notes_path = notes_path.parent / f"{timestamp}.raw_notes.txt"
+            if raw_notes_path.exists() and raw_notes_path.stat().st_mtime > analysis_mtime:
+                return True
+
+    return False
+
+
 def _load_task_notes_usb(notes_type: str = "daily", file_preference: str = "png") -> tuple[str, Path, datetime]:
-    """Load task notes from USB/local directory.
+    """Load task notes from all configured local input directories.
+
+    Checks all available input directories (USB_INPUT_DIR, LOCAL_INPUT_DIR)
+    and returns the first unanalyzed file found.
 
     Args:
         notes_type: Type of notes to load (e.g., "daily", "weekly")
@@ -85,18 +132,14 @@ def _load_task_notes_usb(notes_type: str = "daily", file_preference: str = "png"
 
     Returns:
         Tuple of (file contents, path to the notes file, parsed datetime from filename)
+
+    Raises:
+        FileNotFoundError: If no unanalyzed notes are found in any directory
     """
-    base_dir = Path(USB_DIR)
+    input_dirs = get_all_input_directories()
 
-    if not base_dir.exists():
-        raise FileNotFoundError(
-            f"USB directory not found: {USB_DIR}"
-        )
-
-    notes_dir = base_dir / notes_type
-
-    if not notes_dir.exists():
-        raise FileNotFoundError(f"Notes directory not found: {notes_dir}")
+    if not input_dirs:
+        raise FileNotFoundError("No input directories configured or available")
 
     # Determine which extensions to search based on preference
     if file_preference == "txt":
@@ -104,66 +147,72 @@ def _load_task_notes_usb(notes_type: str = "daily", file_preference: str = "png"
     else:  # default to "png"
         search_extensions = IMAGE_EXTENSIONS
 
-    # Find all files matching preference and sort by name (newest first based on timestamp)
-    all_files = []
-    for ext in search_extensions:
-        all_files.extend(notes_dir.glob(f"*{ext}"))
-    all_files = sorted(all_files, reverse=True)
+    # Try each input directory
+    for base_dir in input_dirs:
+        notes_dir = base_dir / notes_type
 
-    for notes_path in all_files:
-        # Skip files that are already analysis files
-        if "_analysis" in notes_path.name:
-            continue
+        if not notes_dir.exists():
+            continue  # Skip this directory if it doesn't exist
 
-        # Extract timestamp from filename (handles page identifiers)
-        timestamp = _extract_timestamp(notes_path.name)
-        if not timestamp:
-            continue
+        # Find all files matching preference and sort by name (newest first based on timestamp)
+        all_files = []
+        for ext in search_extensions:
+            all_files.extend(notes_dir.glob(f"*{ext}"))
+        all_files = sorted(all_files, reverse=True)
 
-        # Check if this file already has an associated analysis file
-        # Use timestamp only so all pages of a multi-page note share one analysis
-        analysis_filename = f"{timestamp}.{notes_type}_analysis.txt"
-        analysis_path = notes_dir / analysis_filename
-
-        if not analysis_path.exists():
-            # Parse datetime from the extracted timestamp
-            file_date = _parse_filename_datetime(notes_path.name)
-            if not file_date:
+        for notes_path in all_files:
+            # Skip files that are already analysis files
+            if "_analysis" in notes_path.name:
                 continue
 
-            # Extract text based on file type
-            if notes_path.suffix.lower() in IMAGE_EXTENSIONS:
-                file_contents = extract_text_from_image(notes_path)
-            else:
-                file_contents = notes_path.read_text()
+            # Extract timestamp from filename (handles page identifiers)
+            timestamp = _extract_timestamp(notes_path.name)
+            if not timestamp:
+                continue
 
-            return file_contents, notes_path, file_date
+            # Check if this file already has an associated analysis file
+            # Use timestamp only so all pages of a multi-page note share one analysis
+            analysis_filename = f"{timestamp}.{notes_type}_analysis.txt"
+            analysis_path = notes_dir / analysis_filename
+
+            # Include file if: no analysis exists OR file was modified after analysis
+            if not analysis_path.exists() or _needs_reanalysis_usb(notes_path, analysis_path):
+                # Parse datetime from the extracted timestamp
+                file_date = _parse_filename_datetime(notes_path.name)
+                if not file_date:
+                    continue
+
+                # Extract text based on file type
+                if notes_path.suffix.lower() in IMAGE_EXTENSIONS:
+                    file_contents = extract_text_from_image(notes_path)
+                else:
+                    file_contents = notes_path.read_text()
+
+                return file_contents, notes_path, file_date
 
     raise FileNotFoundError(
-        f"No unanalyzed notes files found in: {notes_dir}"
+        f"No unanalyzed notes files found in any configured input directory"
     )
 
 
 def _load_all_unanalyzed_task_notes_usb(notes_type: str = "daily", file_preference: str = "png") -> list[tuple[str, Path, datetime]]:
-    """Load all unanalyzed task notes from USB/local directory.
+    """Load all unanalyzed task notes from all configured local input directories.
+
+    Checks all available input directories (USB_INPUT_DIR, LOCAL_INPUT_DIR)
+    and collects unique unanalyzed files. Deduplicates by timestamp to avoid
+    processing the same logical file from multiple locations.
 
     Args:
+        notes_type: Type of notes to load (default: "daily")
         file_preference: File type preference ("png" or "txt")
 
     Returns:
         List of tuples of (file contents, path to the notes file, parsed datetime from filename)
     """
-    base_dir = Path(USB_DIR)
+    input_dirs = get_all_input_directories()
 
-    if not base_dir.exists():
-        raise FileNotFoundError(
-            f"USB directory not found: {USB_DIR}"
-        )
-
-    notes_dir = base_dir / "daily"
-
-    if not notes_dir.exists():
-        raise FileNotFoundError(f"Notes directory not found: {notes_dir}")
+    if not input_dirs:
+        raise FileNotFoundError("No input directories configured or available")
 
     # Determine which extensions to search based on preference
     if file_preference == "txt":
@@ -171,53 +220,70 @@ def _load_all_unanalyzed_task_notes_usb(notes_type: str = "daily", file_preferen
     else:  # default to "png"
         search_extensions = IMAGE_EXTENSIONS
 
-    # Find all files matching preference and sort by name (newest first based on timestamp)
-    all_files = []
-    for ext in search_extensions:
-        all_files.extend(notes_dir.glob(f"*{ext}"))
-    all_files = sorted(all_files, reverse=True)
-
     unanalyzed_files = []
+    seen_timestamps = set()  # Track timestamps to avoid duplicates
 
-    for notes_path in all_files:
-        # Skip files that are already analysis files
-        if "_analysis" in notes_path.name:
-            continue
+    # Check each input directory
+    for base_dir in input_dirs:
+        notes_dir = base_dir / notes_type
 
-        # Extract timestamp from filename (handles page identifiers)
-        timestamp = _extract_timestamp(notes_path.name)
-        if not timestamp:
-            continue
+        if not notes_dir.exists():
+            continue  # Skip this directory if it doesn't exist
 
-        # Check if this file already has an associated analysis file
-        # Use timestamp only so all pages of a multi-page note share one analysis
-        analysis_filename = f"{timestamp}.daily_analysis.txt"
-        analysis_path = notes_dir / analysis_filename
+        # Find all files matching preference and sort by name (newest first based on timestamp)
+        all_files = []
+        for ext in search_extensions:
+            all_files.extend(notes_dir.glob(f"*{ext}"))
+        all_files = sorted(all_files, reverse=True)
 
-        if not analysis_path.exists():
-            # Parse datetime from the extracted timestamp
-            file_date = _parse_filename_datetime(notes_path.name)
-            if not file_date:
+        for notes_path in all_files:
+            # Skip files that are already analysis files
+            if "_analysis" in notes_path.name:
                 continue
 
-            # Extract text based on file type
-            if notes_path.suffix.lower() in IMAGE_EXTENSIONS:
-                file_contents = extract_text_from_image(notes_path)
-            else:
-                file_contents = notes_path.read_text()
+            # Extract timestamp from filename (handles page identifiers)
+            timestamp = _extract_timestamp(notes_path.name)
+            if not timestamp:
+                continue
 
-            unanalyzed_files.append((file_contents, notes_path, file_date))
+            # Skip if we've already seen this timestamp (deduplication)
+            if timestamp in seen_timestamps:
+                continue
+
+            # Check if this file already has an associated analysis file
+            # Use timestamp only so all pages of a multi-page note share one analysis
+            analysis_filename = f"{timestamp}.{notes_type}_analysis.txt"
+            analysis_path = notes_dir / analysis_filename
+
+            # Include file if: no analysis exists OR file was modified after analysis
+            if not analysis_path.exists() or _needs_reanalysis_usb(notes_path, analysis_path):
+                # Parse datetime from the extracted timestamp
+                file_date = _parse_filename_datetime(notes_path.name)
+                if not file_date:
+                    continue
+
+                # Extract text based on file type
+                if notes_path.suffix.lower() in IMAGE_EXTENSIONS:
+                    file_contents = extract_text_from_image(notes_path)
+                else:
+                    file_contents = notes_path.read_text()
+
+                unanalyzed_files.append((file_contents, notes_path, file_date))
+                seen_timestamps.add(timestamp)  # Mark this timestamp as processed
 
     if not unanalyzed_files:
         raise FileNotFoundError(
-            f"No unanalyzed notes files found in: {notes_dir}"
+            f"No unanalyzed notes files found in any configured input directory"
         )
 
     return unanalyzed_files
 
 
 def _collect_weekly_analyses_usb_for_week(week_start: datetime, week_end: datetime) -> tuple[str, Path, datetime, datetime]:
-    """Collect weekly analyses from USB/local directory for a specific work week.
+    """Collect weekly analyses from all configured local input directories for a specific work week.
+
+    Collects daily analyses from all input directories and saves the weekly analysis
+    to the primary input directory.
 
     Args:
         week_start: Start of work week (Monday)
@@ -226,36 +292,42 @@ def _collect_weekly_analyses_usb_for_week(week_start: datetime, week_end: dateti
     Returns:
         Tuple of (combined analysis text, output path, week start, week end)
     """
-    base_dir = Path(USB_DIR)
+    from .config import get_primary_input_directory
 
-    if not base_dir.exists():
-        raise FileNotFoundError(
-            f"USB directory not found: {USB_DIR}"
-        )
+    input_dirs = get_all_input_directories()
 
-    daily_dir = base_dir / "daily"
-    weekly_dir = base_dir / "weekly"
+    if not input_dirs:
+        raise FileNotFoundError("No input directories configured or available")
 
-    if not daily_dir.exists():
-        raise FileNotFoundError(f"daily notes directory not found: {daily_dir}")
-
-    weekly_dir.mkdir(exist_ok=True)
-
-    # Find all daily_analysis files from the specified week
-    analysis_files = sorted(daily_dir.glob("*.daily_analysis.txt"))
-
+    # Collect daily analyses from all input directories
     collected_analyses = []
-    for analysis_path in analysis_files:
-        try:
-            date_str = analysis_path.stem.split(".")[0]
-            file_date = datetime.strptime(date_str, "%Y%m%d_%H%M%S")
-        except ValueError:
+    seen_timestamps = set()  # Deduplicate by timestamp
+
+    for base_dir in input_dirs:
+        daily_dir = base_dir / "daily"
+
+        if not daily_dir.exists():
             continue
 
-        if week_start <= file_date <= week_end:
-            content = analysis_path.read_text()
-            date_label = file_date.strftime("%A, %B %d, %Y")
-            collected_analyses.append(f"## {date_label}\n\n{content}")
+        # Find all daily_analysis files from the specified week
+        analysis_files = sorted(daily_dir.glob("*.daily_analysis.txt"))
+
+        for analysis_path in analysis_files:
+            try:
+                date_str = analysis_path.stem.split(".")[0]
+                file_date = datetime.strptime(date_str, "%Y%m%d_%H%M%S")
+            except ValueError:
+                continue
+
+            # Skip if we've already seen this timestamp
+            if date_str in seen_timestamps:
+                continue
+
+            if week_start <= file_date <= week_end:
+                content = analysis_path.read_text()
+                date_label = file_date.strftime("%A, %B %d, %Y")
+                collected_analyses.append(f"## {date_label}\n\n{content}")
+                seen_timestamps.add(date_str)
 
     if not collected_analyses:
         raise FileNotFoundError(
@@ -263,7 +335,16 @@ def _collect_weekly_analyses_usb_for_week(week_start: datetime, week_end: dateti
             f"{week_start.strftime('%Y-%m-%d')} to {week_end.strftime('%Y-%m-%d')}"
         )
 
+    # Sort by date (analyses are labeled with dates)
+    collected_analyses.sort()
+
     combined_text = "\n\n---\n\n".join(collected_analyses)
+
+    # Save to primary input directory
+    primary_dir = get_primary_input_directory()
+    weekly_dir = primary_dir / "weekly"
+    weekly_dir.mkdir(exist_ok=True)
+
     week_label = week_start.strftime("%Y%m%d")
     output_path = weekly_dir / f"{week_label}.week.txt"
 
@@ -320,6 +401,47 @@ def _save_analysis_usb(analysis: str, input_path: Path, notes_type: str = "daily
     return output_path
 
 
+def _raw_text_exists_usb(input_path: Path) -> bool:
+    """Check if a raw text file already exists for the given input file.
+
+    Args:
+        input_path: Path to the original notes file (PNG)
+
+    Returns:
+        True if raw text file exists, False otherwise
+    """
+    timestamp = _extract_timestamp(input_path.name)
+    if timestamp:
+        raw_filename = f"{timestamp}.raw_notes.txt"
+    else:
+        raw_filename = f"{input_path.stem}.raw_notes.txt"
+    raw_path = input_path.parent / raw_filename
+    return raw_path.exists()
+
+
+def _save_raw_text_usb(raw_text: str, input_path: Path) -> Path:
+    """Save raw extracted text to USB/local directory.
+
+    Args:
+        raw_text: The raw extracted text content
+        input_path: Path to the original notes file (PNG)
+
+    Returns:
+        Path to the saved raw text file
+    """
+    # Extract timestamp from filename (handles page identifiers)
+    timestamp = _extract_timestamp(input_path.name)
+    if timestamp:
+        output_filename = f"{timestamp}.raw_notes.txt"
+    else:
+        # Fallback to full stem if timestamp extraction fails
+        output_filename = f"{input_path.stem}.raw_notes.txt"
+    output_path = input_path.parent / output_filename
+
+    output_path.write_text(raw_text)
+    return output_path
+
+
 # =============================================================================
 # Google Drive Functions
 # =============================================================================
@@ -341,6 +463,39 @@ def _analysis_exists_locally(notes_type: str, analysis_filename: str) -> bool:
 
     analysis_path = Path(LOCAL_OUTPUT_DIR) / notes_type / analysis_filename
     return analysis_path.exists()
+
+
+def _needs_reanalysis_gdrive(notes_type: str, timestamp: str, file_info: dict) -> bool:
+    """Check if a Google Drive notes file needs re-analysis.
+
+    For Google Drive sources with LOCAL_OUTPUT_DIR, checks if the local raw_notes.txt
+    file was modified after the analysis file was created.
+
+    Args:
+        notes_type: Type of notes ("daily" or "weekly")
+        timestamp: The extracted timestamp from the filename
+        file_info: Google Drive file info dict with 'modifiedTime'
+
+    Returns:
+        True if re-analysis is needed
+    """
+    from .config import LOCAL_OUTPUT_DIR
+
+    if not LOCAL_OUTPUT_DIR:
+        return False  # Can't check modification times without local files
+
+    analysis_path = Path(LOCAL_OUTPUT_DIR) / notes_type / f"{timestamp}.{notes_type}_analysis.txt"
+    if not analysis_path.exists():
+        return False  # No analysis exists, not a "re-analysis" case
+
+    analysis_mtime = analysis_path.stat().st_mtime
+
+    # Check if the local raw_notes.txt was edited after the analysis
+    raw_notes_path = Path(LOCAL_OUTPUT_DIR) / notes_type / f"{timestamp}.raw_notes.txt"
+    if raw_notes_path.exists() and raw_notes_path.stat().st_mtime > analysis_mtime:
+        return True
+
+    return False
 
 
 def _load_task_notes_gdrive(notes_type: str = "daily", file_preference: str = "png") -> tuple[str, Path, datetime]:
@@ -400,8 +555,12 @@ def _load_task_notes_gdrive(notes_type: str = "daily", file_preference: str = "p
             analysis_filename = f"{stem}.{notes_type}_analysis.txt"
 
         # Check local output directory first (when LOCAL_OUTPUT_DIR is set)
+        # Skip if analysis exists AND no re-analysis is needed
         if _analysis_exists_locally(notes_type, analysis_filename):
-            continue
+            if timestamp and _needs_reanalysis_gdrive(notes_type, timestamp, file_info):
+                pass  # Include for re-analysis
+            else:
+                continue
 
         # Fall back to checking Google Drive (for setups without local output)
         if not LOCAL_OUTPUT_DIR and client.file_exists(notes_type, analysis_filename):
@@ -494,8 +653,12 @@ def _load_all_unanalyzed_task_notes_gdrive(notes_type: str = "daily", file_prefe
             analysis_filename = f"{stem}.{notes_type}_analysis.txt"
 
         # Check local output directory first (when LOCAL_OUTPUT_DIR is set)
+        # Skip if analysis exists AND no re-analysis is needed
         if _analysis_exists_locally(notes_type, analysis_filename):
-            continue
+            if timestamp and _needs_reanalysis_gdrive(notes_type, timestamp, file_info):
+                pass  # Include for re-analysis
+            else:
+                continue
 
         # Fall back to checking Google Drive (for setups without local output)
         if not LOCAL_OUTPUT_DIR and client.file_exists(notes_type, analysis_filename):
@@ -661,6 +824,85 @@ def _save_analysis_gdrive(analysis: str, input_path: Path, notes_type: str = "da
     client.upload_file(subfolder, output_filename, formatted_output)
 
     return Path(f"gdrive://{subfolder}/{output_filename}")
+
+
+def _raw_text_exists_gdrive(input_path: Path) -> bool:
+    """Check if a raw text file already exists for the given Google Drive input file.
+
+    Args:
+        input_path: Virtual path from load functions (gdrive://...)
+
+    Returns:
+        True if raw text file exists, False otherwise
+    """
+    from .config import LOCAL_OUTPUT_DIR
+    from .gdrive import extract_timestamp_from_filename
+
+    filename = input_path.name
+    timestamp = extract_timestamp_from_filename(filename)
+    if timestamp:
+        raw_filename = f"{timestamp}.raw_notes.txt"
+    else:
+        stem = Path(filename).stem
+        if "." in stem:
+            stem = stem.split(".")[0]
+        raw_filename = f"{stem}.raw_notes.txt"
+
+    # Check local output directory first (when LOCAL_OUTPUT_DIR is set)
+    if LOCAL_OUTPUT_DIR:
+        raw_path = Path(LOCAL_OUTPUT_DIR) / "daily" / raw_filename
+        if raw_path.exists():
+            return True
+
+    # Fall back to checking Google Drive
+    if not LOCAL_OUTPUT_DIR:
+        from .gdrive import GoogleDriveClient
+        client = GoogleDriveClient()
+        return client.file_exists("daily", raw_filename)
+
+    return False
+
+
+def _save_raw_text_gdrive(raw_text: str, input_path: Path) -> Path:
+    """Save raw extracted text when source is Google Drive.
+
+    If LOCAL_OUTPUT_DIR is configured, saves locally to that directory.
+    Otherwise attempts to upload to Google Drive.
+
+    Args:
+        raw_text: The raw extracted text content
+        input_path: Virtual path from load functions (gdrive://...)
+
+    Returns:
+        Path to the saved raw text file (local or virtual gdrive path)
+    """
+    from .config import LOCAL_OUTPUT_DIR
+    from .gdrive import extract_timestamp_from_filename
+
+    filename = input_path.name
+    timestamp = extract_timestamp_from_filename(filename)
+    if timestamp:
+        output_filename = f"{timestamp}.raw_notes.txt"
+    else:
+        stem = Path(filename).stem
+        if "." in stem:
+            stem = stem.split(".")[0]
+        output_filename = f"{stem}.raw_notes.txt"
+
+    # If local output directory is configured, save there
+    if LOCAL_OUTPUT_DIR:
+        output_dir = Path(LOCAL_OUTPUT_DIR) / "daily"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / output_filename
+        output_path.write_text(raw_text)
+        return output_path
+
+    # Otherwise, attempt to upload to Google Drive
+    from .gdrive import GoogleDriveClient
+    client = GoogleDriveClient()
+    client.upload_file("daily", output_filename, raw_text)
+
+    return Path(f"gdrive://daily/{output_filename}")
 
 
 # =============================================================================
@@ -1416,6 +1658,47 @@ def save_analysis(analysis: str, input_path: Path, notes_type: str = "daily") ->
         return _save_analysis_gdrive(analysis, input_path, notes_type)
     else:
         return _save_analysis_usb(analysis, input_path, notes_type)
+
+
+def raw_text_exists(input_path: Path) -> bool:
+    """Check if a raw text file already exists for the given input file.
+
+    Automatically selects between USB and Google Drive based on the input path.
+
+    Args:
+        input_path: Path to the original notes file (PNG)
+
+    Returns:
+        True if raw text file exists, False otherwise
+    """
+    path_str = str(input_path)
+    if path_str.startswith("gdrive:"):
+        return _raw_text_exists_gdrive(input_path)
+    else:
+        return _raw_text_exists_usb(input_path)
+
+
+def save_raw_text(raw_text: str, input_path: Path) -> Path:
+    """Save the raw extracted text to a file.
+
+    Automatically selects between USB and Google Drive based on the input path.
+    If input_path starts with "gdrive:", saves to Google Drive; otherwise saves locally.
+
+    The raw text is saved as-is without any modifications or headers,
+    preserving any completion markers (✓, ✗, ☆) present in the original notes.
+
+    Args:
+        raw_text: The raw extracted text content
+        input_path: Path to the original notes file (PNG)
+
+    Returns:
+        Path to the saved raw text file
+    """
+    path_str = str(input_path)
+    if path_str.startswith("gdrive:"):
+        return _save_raw_text_gdrive(raw_text, input_path)
+    else:
+        return _save_raw_text_usb(raw_text, input_path)
 
 
 def get_notes_source() -> str:

@@ -22,6 +22,8 @@ Here's the deal: you write your tasks on a note-taking device (reMarkable, Super
 - Automatically finds ALL unanalyzed notes files and processes them in parallel (because who wants to manually track that?)
 - Handles both text files (.txt) and images (.png, .jpg, .jpeg, .gif, .webp)
 - Extracts text from your handwritten notes using Claude's vision API—yes, even your terrible handwriting
+- **Automatic raw text preservation**: When analyzing PNG notes, automatically saves the extracted text as `.raw_notes.txt` files for easy editing in the UI
+- **Smart re-analysis**: Detects when notes files are edited after their initial analysis and automatically includes them for re-analysis, replacing old analyses
 - Works with local/USB directories or Google Drive (your choice)
 - Tweak Claude's model parameters via a simple YAML file
 - GTD-based prioritization with built-in workload guardrails that cap you at 6-7 hours of focused work per day (because burnout is bad, actually)
@@ -30,7 +32,7 @@ Here's the deal: you write your tasks on a note-taking device (reMarkable, Super
 - Auto-triggers monthly analyses when you have 4+ weekly analyses or when the calendar month has ended
 - Auto-triggers annual analyses when you have 12 monthly analyses or when the calendar year has ended with at least 1 monthly analysis
 - Shell alias so you can just type `triage` instead of the full command
-- **Web Interface**: A professional Streamlit UI for browsing, editing, and triaging your notes visually
+- **Web Interface**: A professional Streamlit UI for browsing, editing, creating, and triaging your notes visually
 
 ## Requirements
 
@@ -81,29 +83,56 @@ cp .env.template .env
 
 ### Notes Source Configuration
 
-TaskTriage can read your notes from two places. Pick at least one:
+TaskTriage can read notes from multiple input sources simultaneously. Configure at least one:
 
-#### Option 1: USB/Local Directory
+#### Option 1: USB/Mounted Device Directory
 
-If you're syncing notes to a local directory (like via USB from your reMarkable or Supernote):
+If you're syncing notes to a USB drive or mounted device from your reMarkable or Supernote:
 
 ```bash
 # Path to the mounted note-taking device directory
-USB_DIR=/path/to/your/notes/directory
+USB_INPUT_DIR=/path/to/your/usb/notes/directory
 ```
 
-#### Option 2: Google Drive
+#### Option 2: Local Hard Drive Directory
+
+Add an additional local directory to check for notes files:
+
+```bash
+# Path to local hard drive notes directory (optional)
+LOCAL_INPUT_DIR=/path/to/your/local/notes/directory
+```
+
+#### Option 3: Google Drive
 
 If your notes live in Google Drive, check out the [Google Drive Setup](#google-drive-setup) section below. Fair warning: it's a bit involved.
 
-#### Source Selection
+#### How Multi-Source Reading Works
 
-By default, TaskTriage is set to "auto" mode—it looks for USB first, then falls back to Google Drive if USB isn't available. You can force a specific source if you want:
+**TaskTriage automatically checks ALL configured input directories** when looking for notes files. If you have both `USB_INPUT_DIR` and `LOCAL_INPUT_DIR` configured, it will:
+- Search both directories for unanalyzed notes
+- Deduplicate files by timestamp (if the same timestamp appears in multiple locations, only the first one found is processed)
+- Collect unique notes from all sources for analysis
+
+This means you can have notes in multiple locations and TaskTriage will find them all.
+
+#### Source Selection for New Files
+
+By default, TaskTriage is set to "auto" mode for OUTPUT (creating new files in the UI):
 
 ```bash
 # Options: auto, usb, gdrive
 NOTES_SOURCE=auto
 ```
+
+In auto mode, new files created in the UI are saved to:
+1. `USB_INPUT_DIR` (if available)
+2. `LOCAL_INPUT_DIR` (if USB not available)
+3. Google Drive (if neither local directory is available)
+
+#### Backward Compatibility
+
+The old `USB_DIR` variable is still supported for backward compatibility. If you have existing configurations using `USB_DIR`, they will continue to work (it's treated as `USB_INPUT_DIR`).
 
 ### Anthropic API Key
 
@@ -256,7 +285,9 @@ notes/
 ├── daily/
 │   ├── 20251225_074353.txt              # Raw daily notes (text)
 │   ├── 20251226_083000.png              # Raw daily notes (image)
+│   ├── 20251226_083000.raw_notes.txt    # Extracted text from PNG (auto-generated, editable)
 │   ├── 20251225_074353.daily_analysis.txt  # Generated analysis
+│   ├── 20251226_083000.daily_analysis.txt  # Generated analysis
 │   └── ...
 ├── weekly/
 │   ├── 20251223.weekly_analysis.txt     # Generated weekly analysis
@@ -272,8 +303,9 @@ notes/
 
 - **Text files**: `.txt`
 - **Image files**: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`
+- **Raw text files**: `.raw_notes.txt` (auto-generated from image analysis, preserves completion markers)
 
-Image files get run through Claude's vision API to extract your handwritten text automatically.
+Image files get run through Claude's vision API to extract your handwritten text automatically. The extracted text is saved as a `.raw_notes.txt` file in parallel with the analysis, making it easy to edit the text directly in the UI if needed. If you edit a `.raw_notes.txt` file after its initial analysis, TaskTriage will detect the change and automatically re-analyze it on the next run.
 
 ### Notes File Naming
 
@@ -286,8 +318,8 @@ This lets TaskTriage figure out which file is most recent and which ones have al
 How to mark up your handwritten notes:
 - **Task categories**: Draw a single underline above a group of bullets
 - **Completed tasks**: Add a checkmark (✓)
-- **Removed/abandoned tasks**: Mark with an X
-- **Urgent tasks**: Add an asterisk (*)
+- **Removed/abandoned tasks**: Mark with an (✗)
+- **Urgent tasks**: Add a star (☆)
 
 ### Example Files
 
@@ -322,7 +354,7 @@ tasktriage --files png
 
 ### Web Interface
 
-TaskTriage includes a professional web interface built with Streamlit. Launch it with:
+TaskTriage includes a web interface built with Streamlit. Launch it with:
 
 ```bash
 # Using Task
@@ -338,14 +370,16 @@ The UI opens in your browser at `http://localhost:8501` and provides:
 - **Triage Button** - Run the full analysis pipeline with real-time progress updates
 - **Configuration** - Edit `.env` and `config.yaml` settings directly in the browser (API keys, notes source, model parameters)
 - **Raw Notes List** - Browse `.txt` and image files from your `daily/` directory, sorted by date
+  - **Open** - Load a selected note file for editing
+  - **New** - Create a new empty `.txt` notes file with timestamp-based naming
 - **Analysis Files List** - Browse all generated analysis files across daily/weekly/monthly/annual
-- **Quick Markup Tools** - Add task markers (✓ completed, ✗ removed, * urgent) with one click
 
 **Right Panel (Editor)**
 - Full-height text editor for viewing and editing selected files
 - Image preview for handwritten note images
 - Save/Revert buttons with unsaved changes indicator
 - Notes source status display
+- **Quick Markup Tools** - Easily add task markers (✓ completed, ✗ removed, ☆ urgent), which are automatically interpretted at the right side of each line.
 
 The web interface runs the same analysis pipeline as the CLI, with parallel processing and automatic triggering of weekly/monthly/annual analyses when conditions are met.
 
@@ -356,9 +390,13 @@ TaskTriage follows a strict temporal hierarchy, ensuring each level completes be
 **LEVEL 1: Daily Analysis (runs automatically)**
 
 1. TaskTriage finds ALL unanalyzed `.txt` or image files in `Notes/daily/`
+   - Includes files that have never been analyzed
+   - **Smart re-analysis**: Also includes files that were edited after their last analysis (detects changes by comparing file modification times)
 2. Processes them in parallel (up to 5 concurrent API calls)
 3. For images, Claude's vision API extracts the text from your handwriting
+   - **Automatic preservation**: The extracted text is also saved as a `.raw_notes.txt` file for easy editing in the UI
 4. Each file gets analyzed and saved as `{filename}.daily_analysis.txt`
+   - If re-analyzing an edited file, the new analysis **replaces** the old one (no duplicates)
 5. Shows progress in real-time with success/failure indicators
 6. Prints: `Daily Summary: X successful, Y failed`
 
@@ -457,10 +495,11 @@ TaskTriage organizes your analyses in a clear hierarchy:
 ```
 Notes/
 ├── daily/
-│   ├── 20251225_074353.txt                    # Your daily task notes
+│   ├── 20251225_074353.txt                    # Your daily task notes (text)
 │   ├── 20251225_074353.daily_analysis.txt     # Analysis output
-│   ├── 20251226_094500.png
-│   └── 20251226_094500.daily_analysis.txt
+│   ├── 20251226_094500.png                    # Your daily task notes (image)
+│   ├── 20251226_094500.raw_notes.txt          # Extracted text from PNG (auto-generated)
+│   └── 20251226_094500.daily_analysis.txt     # Analysis output
 ├── weekly/
 │   ├── 20251223.weekly_analysis.txt           # Week of Dec 23-27
 │   └── 20251230.weekly_analysis.txt           # Week of Dec 30-Jan 3
@@ -473,6 +512,7 @@ Notes/
 
 Filename formats:
 - **Daily notes**: `YYYYMMDD_HHMMSS.{txt|png|jpg|...}` (e.g., `20251225_074353.txt`)
+- **Raw text from images**: `YYYYMMDD_HHMMSS.raw_notes.txt` (auto-generated when analyzing PNG files)
 - **Daily analyses**: `YYYYMMDD_HHMMSS.daily_analysis.txt`
 - **Weekly analyses**: `YYYYMMDD.weekly_analysis.txt` (date is Monday of that week)
 - **Monthly analyses**: `YYYYMM.monthly_analysis.txt` (e.g., `202512.monthly_analysis.txt` for December 2025)
@@ -675,11 +715,37 @@ files = client.list_notes_files("daily")
 - Make sure they're in the correct subfolder (`daily/` or `weekly/`)
 - TaskTriage is looking for files that don't have a matching `.daily_analysis.txt` or `.weekly_analysis.txt` file
 
-### USB Directory Issues
+### USB/Local Directory Issues
+
+**"No input directories configured or available"**
+- Make sure at least one of `USB_INPUT_DIR` or `LOCAL_INPUT_DIR` is set in your `.env` file
+- Verify the paths are correct and the directories actually exist
 
 **"USB directory not found"**
-- Is your device actually plugged in and mounted?
-- Check that the `USB_DIR` path in your `.env` file is correct and points to the right location
+- Is your USB device actually plugged in and mounted?
+- Check that the `USB_INPUT_DIR` path in your `.env` file is correct and points to the right location
+- The directory must contain `daily/`, `weekly/`, `monthly/`, and `annual/` subdirectories
+
+**"Local directory not found"**
+- Verify the `LOCAL_INPUT_DIR` path exists
+- Make sure it has the required subdirectory structure (`daily/`, etc.)
+
+### Re-Analysis and Editing Notes
+
+**How do I fix mistakes in my analyzed notes?**
+- Simply edit the `.txt` or `.raw_notes.txt` file in the UI or your text editor
+- Save your changes
+- Run the analysis again—TaskTriage automatically detects the file was modified after its analysis and will re-analyze it
+- The new analysis **replaces** the old one (same filename), so you won't have duplicate analysis files
+
+**What files trigger re-analysis?**
+- `.txt` files that were modified after their `.daily_analysis.txt` was created
+- `.raw_notes.txt` files (extracted from PNGs) that were edited after their analysis
+- The original `.png` file itself if it was replaced with a newer version
+
+**When does re-analysis NOT happen?**
+- If the notes file is older than its analysis file (no changes detected)
+- For files without any existing analysis (these are treated as new files, not re-analysis)
 
 ## License
 

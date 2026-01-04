@@ -23,12 +23,12 @@ The input is a handwritten task list with the following structure:
 - **Tasks**: Listed as a different task per line indented below each category header
 - **Task markers** (appear to the right of each task):
   - `✓` (checkmark) = Task already completed
-  - `X` = Task removed or abandoned
-  - `*` (asterisk) = Urgent/non-negotiable task (highest priority)
+  - `✗` (or X) = Task removed or abandoned
+  - `☆` (star) = Urgent/non-negotiable task (highest priority)
   - No marker = Standard task
 - **Task descriptions**: May vary in clarity, scope, and completeness.
 
-Assume all tasks without completion markers (✓ or X) are intended for today unless explicitly deferred.
+Assume all tasks without completion markers (✓ or ✗) are intended for today unless explicitly deferred.
 
 ## Output Format
 
@@ -104,7 +104,7 @@ The original list contained 8 tasks totaling an estimated 9 hours, exceeding the
 
 ### Step 1: Analyze and Expand Tasks
 
-For each incomplete task (no ✓ or X marker):
+For each incomplete task (no ✓ or ✗ marker):
 - Infer the intended outcome from the description
 - Break it into 2–3 concrete, sequential action steps
 - Each sub-step must be achievable in one focused sitting
@@ -129,8 +129,8 @@ If a task cannot reasonably be completed today:
 ### Step 4: Prioritize and Order
 
 Apply this strict priority ordering:
-1. Urgent (`*`) work tasks
-2. Urgent (`*`) home/personal tasks
+1. Urgent (`☆`) work tasks
+2. Urgent (`☆`) home/personal tasks
 3. Non-urgent work tasks
 4. Non-urgent home/personal tasks
 
@@ -144,7 +144,7 @@ Within each tier:
 Target: 6–7 hours (360–420 minutes) of focused work.
 
 If total exceeds this range:
-- Keep all urgent (`*`) tasks
+- Keep all urgent (`☆`) tasks
 - Defer lowest-impact non-urgent tasks
 - Use practical judgment—don't over-optimize
 
@@ -202,14 +202,14 @@ You will receive 5–7 daily execution plans, each containing:
 - **Numbered task list**: Tasks with energy levels, time estimates, and sub-steps
 - **Markers on original tasks**:
   - `✓` = Completed
-  - `X` = Removed/abandoned
-  - `*` = Originally marked urgent
+  - `✗` = Removed/abandoned
+  - `☆` = Originally marked urgent
 - **Split labels**: `[Today Portion]` and `[Later Portion]` for oversized tasks
 - **Deferred Tasks section**: Tasks moved to later dates
 - **Completed Tasks Review**: Analysis of tasks already completed before planning, including observations about early execution patterns
 - **Critical Assessment**: Observations about that day's planning
 
-Each plan represents both the intended execution and (via ✓/X markers) the actual outcome. The Completed Tasks Review provides insight into what actually gets done early in the day.
+Each plan represents both the intended execution and (via ✓/✗ markers) the actual outcome. The Completed Tasks Review provides insight into what actually gets done early in the day.
 
 ## Output Format
 
@@ -251,7 +251,7 @@ Present as 3–5 concise bullet points focused on patterns, not isolated inciden
 ### Section B: Mis-Prioritization Insights
 
 Critically assess:
-- Did urgent (`*`) tasks earn their priority in practice?
+- Did urgent (`☆`) tasks earn their priority in practice?
 - Were high-energy tasks scheduled at appropriate times?
 - Did low-value urgent tasks crowd out meaningful work?
 - How did work vs. home prioritization hold up under real conditions?
@@ -291,7 +291,7 @@ Ground all recommendations in this week's actual behavior, not aspirational idea
 ### Section E: System Improvement Recommendations
 
 Offer 3–5 specific, actionable changes such as:
-- Stricter criteria for `*` urgency markers
+- Stricter criteria for `☆` urgency markers
 - Time-boxing rules for gravity tasks
 - Triggers for when a task should become a project
 - Splitting heuristics for oversized tasks
@@ -716,7 +716,7 @@ Extract all text from the provided image of handwritten task notes, preserving t
 ## Output Requirements
 
 1. **Preserve structure exactly**: Maintain category headers, indentation, and task groupings
-2. **Preserve markers**: Include all task markers (✓, X, *) in their original positions relative to tasks
+2. **Preserve markers**: Include all task markers (✓, ✗, ☆) in their original positions relative to tasks
 3. **One task per line**: Each task should be on its own line, indented under its category
 4. **Category headers**: Output category names on their own line before their associated tasks
 5. **No interpretation**: Do not add, remove, or modify any content - transcribe exactly what you see
@@ -728,10 +728,10 @@ Extract all text from the provided image of handwritten task notes, preserving t
 Category Name
     Task 1 description
     Task 2 description ✓
-    Task 3 description *
+    Task 3 description ☆
 
 Another Category
-    Task A description X
+    Task A description ✗
     Task B description
 ```
 
