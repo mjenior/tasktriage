@@ -32,7 +32,7 @@ Here's the deal: you write your tasks on a note-taking device (reMarkable, Super
 - Auto-triggers monthly analyses when you have 4+ weekly analyses or when the calendar month has ended
 - Auto-triggers annual analyses when you have 12 monthly analyses or when the calendar year has ended with at least 1 monthly analysis
 - Shell alias so you can just type `triage` instead of the full command
-- **Web Interface**: A professional Streamlit UI for browsing, editing, creating, and triaging your notes visually
+- **Web Interface**: A Streamlit UI for browsing, editing, creating, and triaging your notes visually
 
 <div align="center">
   <img src="./.images/ui.png" alt="Streamlit App">
