@@ -33,6 +33,7 @@ from tasktriage import (
     LOCAL_INPUT_DIR,
     CONFIG_PATH,
     IMAGE_EXTENSIONS,
+    __version__,
 )
 from tasktriage.files import (
     _find_weeks_needing_analysis,
@@ -626,7 +627,7 @@ HELP_TEXT = """TaskTriage uses Claude AI to turn your handwritten task notes int
 def main():
     """Main application entry point."""
     # Header
-    st.markdown("# 📋 TaskTriage", help=HELP_TEXT)
+    st.markdown(f"# 📋 TaskTriage v{__version__}", help=HELP_TEXT)
 
     # Get notes directory
     notes_dir = get_notes_directory()
