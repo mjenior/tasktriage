@@ -46,10 +46,26 @@ CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 # Default model to use if not specified in config
 DEFAULT_MODEL = "claude-haiku-4-5-20241022"
 
-# Notes source preference (can be set via environment)
-# Options: "auto", "usb", "gdrive"
-# "auto" prefers USB if available, falls back to Google Drive
-NOTES_SOURCE = os.getenv("NOTES_SOURCE", "auto").lower()
+
+def get_notes_source() -> str:
+    """Get notes source preference from config.yaml.
+
+    Returns:
+        "auto", "usb", or "gdrive" preference
+    """
+    config = load_model_config()
+    notes_source = config.get("notes_source", "auto").lower()
+
+    # Validate the value
+    if notes_source not in ["auto", "usb", "gdrive"]:
+        return "auto"
+
+    return notes_source
+
+
+# Notes source preference - loaded from config.yaml
+# Options: "auto" (prefer USB, fallback to Google Drive), "usb", "gdrive"
+NOTES_SOURCE = get_notes_source()
 
 
 def fetch_api_key(api_key: str | None = None) -> str:

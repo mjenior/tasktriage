@@ -901,7 +901,7 @@ def main():
             notes_source = st.selectbox(
                 "NOTES_SOURCE",
                 options=["auto", "usb", "gdrive"],
-                index=["auto", "usb", "gdrive"].index(env_config.get("NOTES_SOURCE", "auto"))
+                index=["auto", "usb", "gdrive"].index(yaml_config.get("notes_source", "auto"))
             )
 
             st.markdown("**Input Directories**")
@@ -1015,7 +1015,6 @@ def main():
                     # Save env config
                     new_env = {
                         "ANTHROPIC_API_KEY": api_key,
-                        "NOTES_SOURCE": notes_source,
                         "USB_INPUT_DIR": usb_input_dir,
                         "LOCAL_INPUT_DIR": local_input_dir,
                         "GOOGLE_OAUTH_CLIENT_ID": env_config.get("GOOGLE_OAUTH_CLIENT_ID", ""),
@@ -1030,6 +1029,7 @@ def main():
                         "model": model,
                         "temperature": temperature,
                         "max_tokens": max_tokens,
+                        "notes_source": notes_source,
                     }
                     save_yaml_config(new_yaml)
 

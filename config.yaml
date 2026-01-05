@@ -1,3 +1,7 @@
 max_tokens: 4096
 model: claude-haiku-4-5-20251001
 temperature: 0.7
+
+# Notes source preference (where to read notes from)
+# Options: "auto" (prefer USB, fallback to Google Drive), "usb", "gdrive"
+notes_source: auto
