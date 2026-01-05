@@ -17,8 +17,9 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 USB_INPUT_DIR = os.getenv("USB_INPUT_DIR")  # USB/mounted device directory
 LOCAL_INPUT_DIR = os.getenv("LOCAL_INPUT_DIR")  # Local hard drive directory
 
-# Google Drive configuration
-GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_PATH")
+# Google Drive configuration (OAuth 2.0)
+GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
+GOOGLE_OAUTH_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
 GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
 
 # Local directory to save analysis output (used when GDrive can't upload due to quota)
@@ -30,12 +31,12 @@ if not USB_INPUT_DIR and os.getenv("USB_DIR"):
     USB_INPUT_DIR = os.getenv("USB_DIR")
 
 # Validate that at least one source is configured
-if not USB_INPUT_DIR and not LOCAL_INPUT_DIR and not (GOOGLE_CREDENTIALS_PATH and GOOGLE_DRIVE_FOLDER_ID):
+if not USB_INPUT_DIR and not LOCAL_INPUT_DIR and not (GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET and GOOGLE_DRIVE_FOLDER_ID):
     raise ValueError(
         "No notes source configured. Please set at least one of:\n"
         "  - USB_INPUT_DIR for USB/mounted device directory\n"
         "  - LOCAL_INPUT_DIR for local hard drive directory\n"
-        "  - GOOGLE_CREDENTIALS_PATH and GOOGLE_DRIVE_FOLDER_ID for Google Drive\n"
+        "  - GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, and GOOGLE_DRIVE_FOLDER_ID for Google Drive\n"
         "in your .env file."
     )
 
@@ -126,14 +127,12 @@ def get_all_input_directories() -> list[Path]:
 
 
 def is_gdrive_available() -> bool:
-    """Check if Google Drive is configured.
+    """Check if Google Drive is configured with OAuth.
 
     Returns:
-        True if Google Drive credentials and folder ID are configured
+        True if Google Drive OAuth credentials and folder ID are configured
     """
-    if not GOOGLE_CREDENTIALS_PATH or not GOOGLE_DRIVE_FOLDER_ID:
-        return False
-    return Path(GOOGLE_CREDENTIALS_PATH).exists()
+    return bool(GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET and GOOGLE_DRIVE_FOLDER_ID)
 
 
 def get_primary_input_directory() -> Path:

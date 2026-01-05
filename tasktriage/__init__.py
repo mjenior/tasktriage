@@ -15,7 +15,8 @@ from .config import (
     LOCAL_INPUT_DIR,
     CONFIG_PATH,
     DEFAULT_MODEL,
-    GOOGLE_CREDENTIALS_PATH,
+    GOOGLE_OAUTH_CLIENT_ID,
+    GOOGLE_OAUTH_CLIENT_SECRET,
     GOOGLE_DRIVE_FOLDER_ID,
     NOTES_SOURCE,
     is_usb_available,
@@ -96,7 +97,6 @@ __all__ = [
     # Google Drive
     "GoogleDriveClient",
     "is_gdrive_configured",
-    "is_service_account",
     # Configuration
     "fetch_api_key",
     "load_model_config",
@@ -104,7 +104,8 @@ __all__ = [
     "LOCAL_INPUT_DIR",
     "CONFIG_PATH",
     "DEFAULT_MODEL",
-    "GOOGLE_CREDENTIALS_PATH",
+    "GOOGLE_OAUTH_CLIENT_ID",
+    "GOOGLE_OAUTH_CLIENT_SECRET",
     "GOOGLE_DRIVE_FOLDER_ID",
     "NOTES_SOURCE",
     "is_usb_available",

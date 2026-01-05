@@ -10,7 +10,8 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from google.oauth2 import service_account
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
@@ -30,40 +31,31 @@ MIME_TO_EXT = {
 
 
 class GoogleDriveClient:
-    """Client for interacting with Google Drive API."""
+    """Client for interacting with Google Drive API using OAuth 2.0."""
 
-    def __init__(self, credentials_path: str | None = None, folder_id: str | None = None):
+    def __init__(self, credentials: Credentials | None = None, folder_id: str | None = None):
         """Initialize the Google Drive client.
 
         Args:
-            credentials_path: Path to the service account JSON credentials file.
-                             Falls back to GOOGLE_CREDENTIALS_PATH env var.
+            credentials: OAuth 2.0 credentials object (required)
             folder_id: ID of the root Google Drive folder containing daily/weekly subdirs.
                       Falls back to GOOGLE_DRIVE_FOLDER_ID env var.
 
         Raises:
-            ValueError: If credentials path or folder ID is not provided.
-            FileNotFoundError: If credentials file does not exist.
+            ValueError: If credentials or folder ID is not provided.
         """
-        self.credentials_path = credentials_path or os.getenv("GOOGLE_CREDENTIALS_PATH")
-        self.folder_id = folder_id or os.getenv("GOOGLE_DRIVE_FOLDER_ID")
-
-        if not self.credentials_path:
+        if credentials is None:
             raise ValueError(
-                "Google Drive credentials path not set. "
-                "Set GOOGLE_CREDENTIALS_PATH in .env or pass credentials_path."
+                "OAuth credentials required. Please authenticate with Google Drive first."
             )
+
+        self.credentials = credentials
+        self.folder_id = folder_id or os.getenv("GOOGLE_DRIVE_FOLDER_ID")
 
         if not self.folder_id:
             raise ValueError(
                 "Google Drive folder ID not set. "
                 "Set GOOGLE_DRIVE_FOLDER_ID in .env or pass folder_id."
-            )
-
-        credentials_file = Path(self.credentials_path)
-        if not credentials_file.exists():
-            raise FileNotFoundError(
-                f"Google credentials file not found: {self.credentials_path}"
             )
 
         self._service = None
@@ -73,10 +65,11 @@ class GoogleDriveClient:
     def service(self):
         """Lazily initialize and return the Google Drive service."""
         if self._service is None:
-            credentials = service_account.Credentials.from_service_account_file(
-                self.credentials_path, scopes=SCOPES
-            )
-            self._service = build("drive", "v3", credentials=credentials)
+            # Refresh if expired
+            if self.credentials.expired and self.credentials.refresh_token:
+                self.credentials.refresh(Request())
+
+            self._service = build("drive", "v3", credentials=self.credentials)
         return self._service
 
     def get_subfolder_id(self, subfolder_name: str) -> str | None:
@@ -263,49 +256,17 @@ class GoogleDriveClient:
         return file.get("id")
 
 
-def is_service_account(credentials_path: str | None = None) -> bool:
-    """Check if Google Drive credentials are using a service account.
-
-    Service accounts have storage limitations and cannot upload files.
-
-    Args:
-        credentials_path: Path to credentials JSON file. Falls back to GOOGLE_CREDENTIALS_PATH env var.
-
-    Returns:
-        True if using a service account, False otherwise.
-    """
-    import json
-
-    creds_path = credentials_path or os.getenv("GOOGLE_CREDENTIALS_PATH")
-    if not creds_path:
-        return False
-
-    try:
-        creds_file = Path(creds_path)
-        if not creds_file.exists():
-            return False
-
-        with open(creds_file) as f:
-            creds = json.load(f)
-        return creds.get("type") == "service_account"
-    except Exception:
-        return False
-
-
 def is_gdrive_configured() -> bool:
-    """Check if Google Drive integration is configured.
+    """Check if Google Drive is configured with OAuth.
 
     Returns:
-        True if both credentials path and folder ID are set in environment.
+        True if Google Drive OAuth credentials are configured
     """
-    credentials_path = os.getenv("GOOGLE_CREDENTIALS_PATH")
+    client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
     folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
 
-    if not credentials_path or not folder_id:
-        return False
-
-    # Also check if credentials file exists
-    return Path(credentials_path).exists()
+    return bool(client_id and client_secret and folder_id)
 
 
 def parse_filename_datetime(filename: str) -> datetime | None:
