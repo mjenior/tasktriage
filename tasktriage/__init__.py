@@ -7,6 +7,8 @@ actionable execution plans based on GTD principles.
 Supports reading notes from both local/USB directories and Google Drive.
 """
 
+__version__ = "0.2.0"
+
 # Configuration
 from .config import (
     fetch_api_key,
@@ -73,8 +75,6 @@ from .analysis import analyze_tasks
 
 # CLI entry point
 from .cli import main
-
-__version__ = "0.1.2"
 
 __all__ = [
     # Main entry point
