@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tasktriage"
-version = "0.1.2"
+version = "0.2.0"
 description = "Analyzes handwritten task notes from a note-taking device using Claude AI to generate actionable GTD-based execution plans."
 readme = "README.md"
 requires-python = ">=3.10"
