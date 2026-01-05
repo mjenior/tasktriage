@@ -5,117 +5,100 @@ Tests for tasktriage.gdrive module.
 import io
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, Mock, patch, PropertyMock
 
 import pytest
+
+
+@pytest.fixture
+def mock_oauth_credentials():
+    """Create mock OAuth credentials for testing."""
+    from google.oauth2.credentials import Credentials
+
+    creds = Mock(spec=Credentials)
+    creds.token = "mock_access_token"
+    creds.refresh_token = "mock_refresh_token"
+    creds.token_uri = "https://oauth2.googleapis.com/token"
+    creds.client_id = "mock_client_id"
+    creds.client_secret = "mock_client_secret"
+    creds.scopes = ["https://www.googleapis.com/auth/drive"]
+    creds.valid = True
+    creds.expired = False
+    return creds
 
 
 class TestGoogleDriveClientInit:
     """Tests for GoogleDriveClient initialization."""
 
-    def test_init_with_env_vars(self, temp_dir, monkeypatch):
-        """Should initialize using environment variables."""
-        credentials_path = temp_dir / "credentials.json"
-        credentials_path.write_text('{"type": "service_account"}')
+    def test_init_with_oauth_credentials(self, mock_oauth_credentials):
+        """Should initialize with OAuth credentials."""
+        from tasktriage.gdrive import GoogleDriveClient
 
-        monkeypatch.setenv("GOOGLE_CREDENTIALS_PATH", str(credentials_path))
-        monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "test-folder-id")
+        client = GoogleDriveClient(
+            credentials=mock_oauth_credentials,
+            folder_id="test-folder-id"
+        )
+        assert client.credentials == mock_oauth_credentials
+        assert client.folder_id == "test-folder-id"
+
+    def test_raises_when_credentials_not_provided(self):
+        """Should raise ValueError when credentials are not provided."""
+        from tasktriage.gdrive import GoogleDriveClient
+
+        with pytest.raises(ValueError, match="OAuth credentials required"):
+            GoogleDriveClient(credentials=None, folder_id="test-folder-id")
+
+    def test_init_with_env_var_folder_id(self, mock_oauth_credentials, monkeypatch):
+        """Should use GOOGLE_DRIVE_FOLDER_ID from environment when not provided."""
+        monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "env-folder-id")
 
         from tasktriage.gdrive import GoogleDriveClient
 
-        client = GoogleDriveClient()
-        assert client.credentials_path == str(credentials_path)
-        assert client.folder_id == "test-folder-id"
+        client = GoogleDriveClient(credentials=mock_oauth_credentials)
+        assert client.folder_id == "env-folder-id"
 
-    def test_init_with_explicit_params(self, temp_dir):
-        """Should initialize with explicitly provided parameters."""
-        credentials_path = temp_dir / "credentials.json"
-        credentials_path.write_text('{"type": "service_account"}')
+    def test_explicit_folder_id_overrides_env(self, mock_oauth_credentials, monkeypatch):
+        """Explicit folder_id parameter should override environment variable."""
+        monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "env-folder-id")
 
         from tasktriage.gdrive import GoogleDriveClient
 
         client = GoogleDriveClient(
-            credentials_path=str(credentials_path),
+            credentials=mock_oauth_credentials,
             folder_id="explicit-folder-id"
         )
-        assert client.credentials_path == str(credentials_path)
         assert client.folder_id == "explicit-folder-id"
-
-    def test_raises_when_credentials_path_not_set(self, monkeypatch):
-        """Should raise ValueError when credentials path is not set."""
-        monkeypatch.delenv("GOOGLE_CREDENTIALS_PATH", raising=False)
-        monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "test-folder-id")
-
-        from tasktriage.gdrive import GoogleDriveClient
-
-        with pytest.raises(ValueError, match="credentials path not set"):
-            GoogleDriveClient()
-
-    def test_raises_when_folder_id_not_set(self, temp_dir, monkeypatch):
-        """Should raise ValueError when folder ID is not set."""
-        credentials_path = temp_dir / "credentials.json"
-        credentials_path.write_text('{"type": "service_account"}')
-
-        monkeypatch.setenv("GOOGLE_CREDENTIALS_PATH", str(credentials_path))
-        monkeypatch.delenv("GOOGLE_DRIVE_FOLDER_ID", raising=False)
-
-        from tasktriage.gdrive import GoogleDriveClient
-
-        with pytest.raises(ValueError, match="folder ID not set"):
-            GoogleDriveClient()
-
-    def test_raises_when_credentials_file_not_found(self, monkeypatch):
-        """Should raise FileNotFoundError when credentials file doesn't exist."""
-        monkeypatch.setenv("GOOGLE_CREDENTIALS_PATH", "/nonexistent/credentials.json")
-        monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "test-folder-id")
-
-        from tasktriage.gdrive import GoogleDriveClient
-
-        with pytest.raises(FileNotFoundError, match="credentials file not found"):
-            GoogleDriveClient()
 
 
 class TestGoogleDriveClientService:
     """Tests for GoogleDriveClient service property."""
 
-    @pytest.fixture
-    def mock_credentials(self, temp_dir, monkeypatch):
-        """Set up mock credentials."""
-        credentials_path = temp_dir / "credentials.json"
-        credentials_path.write_text('{"type": "service_account"}')
-        monkeypatch.setenv("GOOGLE_CREDENTIALS_PATH", str(credentials_path))
-        monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "test-folder-id")
-        return credentials_path
-
-    def test_service_lazily_initialized(self, mock_credentials):
+    def test_service_lazily_initialized(self, mock_oauth_credentials):
         """Service should be lazily initialized on first access."""
-        with patch("tasktriage.gdrive.service_account.Credentials.from_service_account_file") as mock_creds, \
-             patch("tasktriage.gdrive.build") as mock_build:
-            mock_creds.return_value = MagicMock()
-            mock_build.return_value = MagicMock()
-
-            from tasktriage.gdrive import GoogleDriveClient
-
-            client = GoogleDriveClient()
-            assert client._service is None
-
-            # Access service property
-            _ = client.service
-
-            mock_creds.assert_called_once()
-            mock_build.assert_called_once()
-
-    def test_service_cached_after_first_access(self, mock_credentials):
-        """Service should be cached after first initialization."""
-        with patch("tasktriage.gdrive.service_account.Credentials.from_service_account_file") as mock_creds, \
-             patch("tasktriage.gdrive.build") as mock_build:
-            mock_creds.return_value = MagicMock()
+        with patch("tasktriage.gdrive.build") as mock_build:
             mock_service = MagicMock()
             mock_build.return_value = mock_service
 
             from tasktriage.gdrive import GoogleDriveClient
 
-            client = GoogleDriveClient()
+            client = GoogleDriveClient(credentials=mock_oauth_credentials)
+            assert client._service is None
+
+            # Access service property
+            _ = client.service
+
+            mock_build.assert_called_once_with("drive", "v3", credentials=mock_oauth_credentials)
+            assert client._service == mock_service
+
+    def test_service_cached_after_first_access(self, mock_oauth_credentials):
+        """Service should be cached after first initialization."""
+        with patch("tasktriage.gdrive.build") as mock_build:
+            mock_service = MagicMock()
+            mock_build.return_value = mock_service
+
+            from tasktriage.gdrive import GoogleDriveClient
+
+            client = GoogleDriveClient(credentials=mock_oauth_credentials)
 
             # Access service multiple times
             service1 = client.service
@@ -124,26 +107,46 @@ class TestGoogleDriveClientService:
             assert service1 is service2
             assert mock_build.call_count == 1
 
+    def test_service_refreshes_expired_credentials(self, mock_oauth_credentials):
+        """Service property should refresh expired credentials before building."""
+        mock_oauth_credentials.expired = True
+        mock_oauth_credentials.refresh_token = "refresh_token"
+
+        with patch("tasktriage.gdrive.build") as mock_build, \
+             patch("tasktriage.gdrive.Request") as mock_request_class:
+            mock_service = MagicMock()
+            mock_build.return_value = mock_service
+            mock_request = MagicMock()
+            mock_request_class.return_value = mock_request
+
+            from tasktriage.gdrive import GoogleDriveClient
+
+            client = GoogleDriveClient(credentials=mock_oauth_credentials)
+
+            # Access service
+            _ = client.service
+
+            # Verify refresh was called
+            mock_oauth_credentials.refresh.assert_called_once_with(mock_request)
+            mock_build.assert_called_once()
+
 
 class TestGoogleDriveClientOperations:
     """Tests for GoogleDriveClient file operations."""
 
     @pytest.fixture
-    def mock_client(self, temp_dir, monkeypatch):
+    def mock_client(self, mock_oauth_credentials):
         """Create a mock GoogleDriveClient with mocked service."""
-        credentials_path = temp_dir / "credentials.json"
-        credentials_path.write_text('{"type": "service_account"}')
-        monkeypatch.setenv("GOOGLE_CREDENTIALS_PATH", str(credentials_path))
-        monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "root-folder-id")
-
-        with patch("tasktriage.gdrive.service_account.Credentials.from_service_account_file"), \
-             patch("tasktriage.gdrive.build") as mock_build:
+        with patch("tasktriage.gdrive.build") as mock_build:
             mock_service = MagicMock()
             mock_build.return_value = mock_service
 
             from tasktriage.gdrive import GoogleDriveClient
 
-            client = GoogleDriveClient()
+            client = GoogleDriveClient(
+                credentials=mock_oauth_credentials,
+                folder_id="root-folder-id"
+            )
             # Force service initialization
             _ = client.service
             return client, mock_service
@@ -295,43 +298,41 @@ class TestGoogleDriveClientOperations:
 class TestIsGdriveConfigured:
     """Tests for is_gdrive_configured function."""
 
-    def test_returns_true_when_configured(self, temp_dir, monkeypatch):
-        """Should return True when both credentials and folder ID are set."""
-        credentials_path = temp_dir / "credentials.json"
-        credentials_path.write_text('{"type": "service_account"}')
-
-        monkeypatch.setenv("GOOGLE_CREDENTIALS_PATH", str(credentials_path))
+    def test_returns_true_when_oauth_configured(self, monkeypatch):
+        """Should return True when OAuth credentials and folder ID are set."""
+        monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "test-client-id")
+        monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_SECRET", "test-client-secret")
         monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "test-folder-id")
 
         from tasktriage.gdrive import is_gdrive_configured
 
         assert is_gdrive_configured() is True
 
-    def test_returns_false_when_credentials_not_set(self, monkeypatch):
-        """Should return False when credentials path is not set."""
-        monkeypatch.delenv("GOOGLE_CREDENTIALS_PATH", raising=False)
+    def test_returns_false_when_client_id_not_set(self, monkeypatch):
+        """Should return False when OAuth client ID is not set."""
+        monkeypatch.delenv("GOOGLE_OAUTH_CLIENT_ID", raising=False)
+        monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_SECRET", "test-client-secret")
         monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "test-folder-id")
 
         from tasktriage.gdrive import is_gdrive_configured
 
         assert is_gdrive_configured() is False
 
-    def test_returns_false_when_folder_id_not_set(self, temp_dir, monkeypatch):
+    def test_returns_false_when_client_secret_not_set(self, monkeypatch):
+        """Should return False when OAuth client secret is not set."""
+        monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "test-client-id")
+        monkeypatch.delenv("GOOGLE_OAUTH_CLIENT_SECRET", raising=False)
+        monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "test-folder-id")
+
+        from tasktriage.gdrive import is_gdrive_configured
+
+        assert is_gdrive_configured() is False
+
+    def test_returns_false_when_folder_id_not_set(self, monkeypatch):
         """Should return False when folder ID is not set."""
-        credentials_path = temp_dir / "credentials.json"
-        credentials_path.write_text('{"type": "service_account"}')
-
-        monkeypatch.setenv("GOOGLE_CREDENTIALS_PATH", str(credentials_path))
+        monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "test-client-id")
+        monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_SECRET", "test-client-secret")
         monkeypatch.delenv("GOOGLE_DRIVE_FOLDER_ID", raising=False)
-
-        from tasktriage.gdrive import is_gdrive_configured
-
-        assert is_gdrive_configured() is False
-
-    def test_returns_false_when_credentials_file_missing(self, monkeypatch):
-        """Should return False when credentials file doesn't exist."""
-        monkeypatch.setenv("GOOGLE_CREDENTIALS_PATH", "/nonexistent/credentials.json")
-        monkeypatch.setenv("GOOGLE_DRIVE_FOLDER_ID", "test-folder-id")
 
         from tasktriage.gdrive import is_gdrive_configured
 

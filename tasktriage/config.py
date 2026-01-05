@@ -47,6 +47,21 @@ CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 DEFAULT_MODEL = "claude-haiku-4-5-20241022"
 
 
+def load_model_config() -> dict:
+    """Load model configuration from YAML file.
+
+    Returns:
+        Dictionary of configuration parameters
+    """
+    if not CONFIG_PATH.exists():
+        return {}
+
+    with open(CONFIG_PATH) as f:
+        config = yaml.safe_load(f)
+
+    return config or {}
+
+
 def get_notes_source() -> str:
     """Get notes source preference from config.yaml.
 
@@ -86,21 +101,6 @@ def fetch_api_key(api_key: str | None = None) -> str:
     if not api_key:
         raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
     return api_key
-
-
-def load_model_config() -> dict:
-    """Load model configuration from YAML file.
-
-    Returns:
-        Dictionary of configuration parameters
-    """
-    if not CONFIG_PATH.exists():
-        return {}
-
-    with open(CONFIG_PATH) as f:
-        config = yaml.safe_load(f)
-
-    return config or {}
 
 
 def is_usb_available() -> bool:
