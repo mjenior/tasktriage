@@ -575,28 +575,94 @@ def sync_files_across_directories(output_dir: Path, progress_callback=None) -> d
     """Sync files bidirectionally between output directory and all configured input directories.
 
     This performs a true sync operation:
-    1. Copies analysis files and raw notes from output directory to all input directories
-    2. Copies new files from input directories to output directory
+    1. Copies raw notes (images, PDFs, text) from input directories to output directory
+    2. Converts visual files (images, PDFs) to .raw_notes.txt using Claude API
+    3. Copies analysis files and raw notes from output directory to all input directories
+    4. Optionally syncs to Google Drive
 
     Args:
         output_dir: The output directory where files are currently saved
         progress_callback: Optional callback function for progress updates
 
     Returns:
-        Dictionary with sync statistics: {total: int, synced: int, errors: list}
+        Dictionary with sync statistics: {total: int, synced: int, converted: int, errors: list}
     """
     from tasktriage.config import get_all_input_directories, is_gdrive_available
+    from tasktriage.files import convert_visual_files_in_directory
     from shutil import copy2
 
-    stats = {"total": 0, "synced": 0, "errors": []}
+    stats = {"total": 0, "synced": 0, "converted": 0, "errors": []}
 
     if not output_dir or not output_dir.exists():
         if progress_callback:
             progress_callback("Output directory not found")
         return stats
 
+    # Get all configured input directories
+    input_dirs = get_all_input_directories()
+
+    # Phase 0: Copy raw notes (images, PDFs, text) FROM input directories TO output directory
+    if progress_callback:
+        progress_callback("Copying raw notes from input directories...")
+
+    valid_extensions = {".txt", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf"}
+    raw_files_copied = set()
+
+    for input_dir in input_dirs:
+        if not input_dir.exists():
+            continue
+
+        # Find all raw note files at top level of input directory
+        for file_path in input_dir.iterdir():
+            if not file_path.is_file():
+                continue
+
+            # Only process valid extensions
+            if file_path.suffix.lower() not in valid_extensions:
+                continue
+
+            # Skip analysis files and raw_notes files (we want original sources)
+            if "_analysis.txt" in file_path.name or ".raw_notes.txt" in file_path.name:
+                continue
+
+            # Skip if we've already copied a file with this name
+            if file_path.name in raw_files_copied:
+                continue
+
+            target_path = output_dir / file_path.name
+
+            # Skip if file already exists in output directory
+            if target_path.exists():
+                continue
+
+            try:
+                copy2(file_path, target_path)
+                stats["synced"] += 1
+                raw_files_copied.add(file_path.name)
+
+                if progress_callback:
+                    progress_callback(f"Copied raw: {file_path.name}")
+
+            except Exception as e:
+                error_msg = f"Failed to copy {file_path.name}: {str(e)}"
+                stats["errors"].append(error_msg)
+                if progress_callback:
+                    progress_callback(f"Error copying: {file_path.name}")
+
+    # Phase 0.5: Convert visual files to .raw_notes.txt using Claude API
+    if progress_callback:
+        progress_callback("Converting visual files to text...")
+
+    conversion_stats = convert_visual_files_in_directory(output_dir, progress_callback)
+    stats["converted"] = conversion_stats["converted"]
+    stats["errors"].extend(conversion_stats["errors"])
+
+    if conversion_stats["converted"] > 0:
+        if progress_callback:
+            progress_callback(f"Converted {conversion_stats['converted']} visual file(s)")
+
     # Phase 1: Sync FROM output directory TO input directories and Google Drive
-    # Get all files to sync (analysis files and raw notes)
+    # Get all files to sync (analysis files and raw notes from subdirs)
     files_from_output = []
     for subdir in ["daily", "weekly", "monthly", "annual"]:
         subdir_path = output_dir / subdir
@@ -606,27 +672,35 @@ def sync_files_across_directories(output_dir: Path, progress_callback=None) -> d
             files_from_output.extend(subdir_path.glob("*.weekly_analysis.txt"))
             files_from_output.extend(subdir_path.glob("*.monthly_analysis.txt"))
             files_from_output.extend(subdir_path.glob("*.annual_analysis.txt"))
-            # Get raw notes files
+            # Get raw notes files from subdirs
             files_from_output.extend(subdir_path.glob("*.raw_notes.txt"))
 
-    # Sync to all configured input directories
-    input_dirs = get_all_input_directories()
+    # Also get top-level raw_notes.txt files (created by conversion)
+    files_from_output.extend(output_dir.glob("*.raw_notes.txt"))
+
+    # Sync to all configured input directories (already retrieved above)
 
     if progress_callback:
         progress_callback("Syncing output files to input directories...")
 
     for file_path in files_from_output:
         # Determine which subdirectory this file belongs to
-        subdir_name = file_path.parent.name  # "daily", "weekly", etc.
+        parent_name = file_path.parent.name
+
+        # Check if this is a top-level file (parent is output_dir itself)
+        is_top_level = file_path.parent == output_dir
 
         for input_dir in input_dirs:
-            target_dir = input_dir / subdir_name
-            target_path = target_dir / file_path.name
+            if is_top_level:
+                # Top-level files go to top level of input directories
+                target_path = input_dir / file_path.name
+            else:
+                # Subdirectory files go to corresponding subdirectory
+                target_dir = input_dir / parent_name
+                target_dir.mkdir(parents=True, exist_ok=True)
+                target_path = target_dir / file_path.name
 
             try:
-                # Create subdirectory if it doesn't exist
-                target_dir.mkdir(parents=True, exist_ok=True)
-
                 # Copy file
                 copy2(file_path, target_path)
                 stats["synced"] += 1
@@ -737,7 +811,7 @@ HELP_TEXT = """TaskTriage uses Claude AI to turn your handwritten task notes int
 
 **Left Panel (Controls)**
 - **Analyze Button** - Run the full analysis pipeline with real-time progress updates
-- **Sync Button** - Bidirectionally sync files: copies analysis files to all input directories and copies new files from input directories to output directory
+- **Sync Button** - Full sync operation: (1) copies raw notes from input directories to output, (2) converts images/PDFs to editable text using Claude API, (3) syncs all files back to input directories
 - **Configuration** - Edit `.env` and `config.yaml` settings directly in the browser (API keys, notes source, model parameters)
 - **Raw Notes List** - Browse `.txt` and image files from your `daily/` directory, sorted by date
 - **Analysis Files List** - Browse all generated analysis files across daily/weekly/monthly/annual
@@ -854,7 +928,7 @@ def main():
 
         if st.button("🔄 Sync", type="secondary", disabled=triage_disabled,
             use_container_width=True, key="btn_sync",
-            help="Save all current files across available configured directories"):
+            help="Copy raw notes from inputs, convert images/PDFs to text, and sync all files across directories"):
 
             # Get the output directory (where files are generated)
             local_output = os.getenv("LOCAL_OUTPUT_DIR")
@@ -879,10 +953,21 @@ def main():
                 # Show results
                 progress_placeholder.empty()
 
-                if stats["total"] == 0:
-                    st.warning("No files to sync")
+                if stats["total"] == 0 and stats["converted"] == 0:
+                    st.warning("No files to sync or convert")
                 else:
-                    st.success(f"✅ Sync complete! Synced {stats['synced']} files")
+                    # Build success message
+                    parts = []
+                    if stats["synced"] > 0:
+                        parts.append(f"synced {stats['synced']} files")
+                    if stats["converted"] > 0:
+                        parts.append(f"converted {stats['converted']} visual files")
+
+                    if parts:
+                        msg = "✅ Sync complete! " + ", ".join(parts)
+                        st.success(msg)
+                    else:
+                        st.info("No new files to sync or convert")
 
                     if stats["errors"]:
                         with st.expander(f"⚠️ {len(stats['errors'])} Errors"):

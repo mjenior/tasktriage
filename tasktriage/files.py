@@ -167,9 +167,16 @@ def _load_task_notes_usb(notes_type: str = "daily", file_preference: str = "png"
                 # Extract text based on file type
                 suffix = notes_path.suffix.lower()
                 if suffix in VISUAL_EXTENSIONS:
-                    file_contents = extract_text_from_image(notes_path)
-                elif suffix in {".pdf"}:
-                    file_contents = extract_text_from_pdf(notes_path)
+                    # Check for existing .raw_notes.txt file first
+                    raw_notes_path = notes_path.parent / f"{timestamp}.raw_notes.txt"
+                    if raw_notes_path.exists():
+                        file_contents = raw_notes_path.read_text()
+                    else:
+                        # Fall back to conversion if not synced yet
+                        if suffix == ".pdf":
+                            file_contents = extract_text_from_pdf(notes_path)
+                        else:
+                            file_contents = extract_text_from_image(notes_path)
                 else:
                     file_contents = notes_path.read_text()
 
@@ -254,9 +261,16 @@ def _load_all_unanalyzed_task_notes_usb(notes_type: str = "daily", file_preferen
                 # Extract text based on file type
                 suffix = notes_path.suffix.lower()
                 if suffix in VISUAL_EXTENSIONS:
-                    file_contents = extract_text_from_image(notes_path)
-                elif suffix in {".pdf"}:
-                    file_contents = extract_text_from_pdf(notes_path)
+                    # Check for existing .raw_notes.txt file first
+                    raw_notes_path = notes_path.parent / f"{timestamp}.raw_notes.txt"
+                    if raw_notes_path.exists():
+                        file_contents = raw_notes_path.read_text()
+                    else:
+                        # Fall back to conversion if not synced yet
+                        if suffix == ".pdf":
+                            file_contents = extract_text_from_pdf(notes_path)
+                        else:
+                            file_contents = extract_text_from_image(notes_path)
                 else:
                     file_contents = notes_path.read_text()
 
@@ -423,6 +437,87 @@ def _save_raw_text_usb(raw_text: str, input_path: Path) -> Path:
     return output_path
 
 
+def convert_visual_files_in_directory(
+    directory: Path,
+    progress_callback=None
+) -> dict:
+    """Convert all unconverted visual files (images/PDFs) in a directory to text.
+
+    This function finds all visual files that don't have a corresponding
+    .raw_notes.txt file and converts them using Claude's vision API.
+
+    Args:
+        directory: The directory containing visual files to convert
+        progress_callback: Optional callback function for progress updates
+
+    Returns:
+        Dictionary with conversion statistics: {converted: int, skipped: int, errors: list}
+    """
+    stats = {"converted": 0, "skipped": 0, "errors": []}
+
+    if not directory or not directory.exists():
+        return stats
+
+    # Find all visual files at the top level
+    visual_files = []
+    for ext in VISUAL_EXTENSIONS:
+        visual_files.extend(directory.glob(f"*{ext}"))
+
+    # Track timestamps we've already processed (for multi-page files)
+    processed_timestamps = set()
+
+    for visual_path in sorted(visual_files):
+        # Skip analysis files
+        if "_analysis" in visual_path.name:
+            continue
+
+        # Extract timestamp from filename
+        timestamp = _extract_timestamp(visual_path.name)
+        if not timestamp:
+            continue
+
+        # Skip if we've already processed this timestamp (multi-page)
+        if timestamp in processed_timestamps:
+            stats["skipped"] += 1
+            continue
+
+        # Check if raw_notes.txt already exists
+        raw_notes_filename = f"{timestamp}.raw_notes.txt"
+        raw_notes_path = directory / raw_notes_filename
+
+        if raw_notes_path.exists():
+            stats["skipped"] += 1
+            processed_timestamps.add(timestamp)
+            continue
+
+        # Convert the visual file to text
+        try:
+            if progress_callback:
+                progress_callback(f"Converting: {visual_path.name}")
+
+            suffix = visual_path.suffix.lower()
+            if suffix == ".pdf":
+                extracted_text = extract_text_from_pdf(visual_path)
+            else:
+                extracted_text = extract_text_from_image(visual_path)
+
+            # Save the extracted text
+            raw_notes_path.write_text(extracted_text)
+            stats["converted"] += 1
+            processed_timestamps.add(timestamp)
+
+            if progress_callback:
+                progress_callback(f"Created: {raw_notes_filename}")
+
+        except Exception as e:
+            error_msg = f"Failed to convert {visual_path.name}: {str(e)}"
+            stats["errors"].append(error_msg)
+            if progress_callback:
+                progress_callback(f"Error: {visual_path.name}")
+
+    return stats
+
+
 # =============================================================================
 # Google Drive Functions
 # =============================================================================
@@ -551,21 +646,43 @@ def _load_task_notes_gdrive(notes_type: str = "daily", file_preference: str = "p
 
         # Download and process the file
         if mime_type in VISUAL_MIME_TYPES:
-            # Download visual file (image or PDF) to temp file and extract text
-            image_data = client.download_file(file_id)
-            ext = get_file_extension(mime_type)
-
-            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-                tmp.write(image_data)
-                tmp_path = Path(tmp.name)
-
-            try:
-                if mime_type in PDF_MIME_TYPES:
-                    file_contents = extract_text_from_pdf(tmp_path)
+            # Check for existing .raw_notes.txt in LOCAL_OUTPUT_DIR first
+            if LOCAL_OUTPUT_DIR and timestamp:
+                raw_notes_path = Path(LOCAL_OUTPUT_DIR) / f"{timestamp}.raw_notes.txt"
+                if raw_notes_path.exists():
+                    file_contents = raw_notes_path.read_text()
                 else:
-                    file_contents = extract_text_from_image(tmp_path)
-            finally:
-                tmp_path.unlink()
+                    # Fall back to downloading and converting
+                    image_data = client.download_file(file_id)
+                    ext = get_file_extension(mime_type)
+
+                    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+                        tmp.write(image_data)
+                        tmp_path = Path(tmp.name)
+
+                    try:
+                        if mime_type in PDF_MIME_TYPES:
+                            file_contents = extract_text_from_pdf(tmp_path)
+                        else:
+                            file_contents = extract_text_from_image(tmp_path)
+                    finally:
+                        tmp_path.unlink()
+            else:
+                # No local output dir, download and convert directly
+                image_data = client.download_file(file_id)
+                ext = get_file_extension(mime_type)
+
+                with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+                    tmp.write(image_data)
+                    tmp_path = Path(tmp.name)
+
+                try:
+                    if mime_type in PDF_MIME_TYPES:
+                        file_contents = extract_text_from_pdf(tmp_path)
+                    else:
+                        file_contents = extract_text_from_image(tmp_path)
+                finally:
+                    tmp_path.unlink()
         else:
             # Download text file directly
             file_contents = client.download_file_text(file_id)
@@ -654,21 +771,43 @@ def _load_all_unanalyzed_task_notes_gdrive(notes_type: str = "daily", file_prefe
 
         # Download and process the file
         if mime_type in VISUAL_MIME_TYPES:
-            # Download visual file (image or PDF) to temp file and extract text
-            image_data = client.download_file(file_id)
-            ext = get_file_extension(mime_type)
-
-            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-                tmp.write(image_data)
-                tmp_path = Path(tmp.name)
-
-            try:
-                if mime_type in PDF_MIME_TYPES:
-                    file_contents = extract_text_from_pdf(tmp_path)
+            # Check for existing .raw_notes.txt in LOCAL_OUTPUT_DIR first
+            if LOCAL_OUTPUT_DIR and timestamp:
+                raw_notes_path = Path(LOCAL_OUTPUT_DIR) / f"{timestamp}.raw_notes.txt"
+                if raw_notes_path.exists():
+                    file_contents = raw_notes_path.read_text()
                 else:
-                    file_contents = extract_text_from_image(tmp_path)
-            finally:
-                tmp_path.unlink()
+                    # Fall back to downloading and converting
+                    image_data = client.download_file(file_id)
+                    ext = get_file_extension(mime_type)
+
+                    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+                        tmp.write(image_data)
+                        tmp_path = Path(tmp.name)
+
+                    try:
+                        if mime_type in PDF_MIME_TYPES:
+                            file_contents = extract_text_from_pdf(tmp_path)
+                        else:
+                            file_contents = extract_text_from_image(tmp_path)
+                    finally:
+                        tmp_path.unlink()
+            else:
+                # No local output dir, download and convert directly
+                image_data = client.download_file(file_id)
+                ext = get_file_extension(mime_type)
+
+                with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+                    tmp.write(image_data)
+                    tmp_path = Path(tmp.name)
+
+                try:
+                    if mime_type in PDF_MIME_TYPES:
+                        file_contents = extract_text_from_pdf(tmp_path)
+                    else:
+                        file_contents = extract_text_from_image(tmp_path)
+                finally:
+                    tmp_path.unlink()
         else:
             # Download text file directly
             file_contents = client.download_file_text(file_id)

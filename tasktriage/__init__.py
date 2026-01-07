@@ -63,6 +63,7 @@ from .files import (
     collect_monthly_analyses_for_month,
     collect_annual_analyses_for_year,
     save_analysis,
+    convert_visual_files_in_directory,
     TEXT_EXTENSIONS,
     ALL_EXTENSIONS,
 )
@@ -89,6 +90,7 @@ __all__ = [
     "collect_monthly_analyses_for_month",
     "collect_annual_analyses_for_year",
     "save_analysis",
+    "convert_visual_files_in_directory",
     "extract_text_from_image",
     "extract_text_from_pdf",
     # Google Drive
