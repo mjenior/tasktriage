@@ -402,12 +402,18 @@ def run_triage_pipeline(progress_callback) -> dict:
     progress_callback("Loading unanalyzed daily files...")
     try:
         unanalyzed_files = load_all_unanalyzed_task_notes("daily", "png")
+        total_files = len(unanalyzed_files)
+        progress_callback(f"Found {total_files} unanalyzed file(s)")
+    except FileNotFoundError:
+        # No unanalyzed files - this is OK, proceed to check weekly/monthly/annual
+        unanalyzed_files = []
+        total_files = 0
+        progress_callback("No unanalyzed daily files found (image/PDF files require Sync first)")
     except Exception as e:
         progress_callback(f"Error loading files: {e}")
-        return results
-
-    total_files = len(unanalyzed_files)
-    progress_callback(f"Found {total_files} unanalyzed file(s)")
+        # Continue to check for weekly/monthly/annual even if daily loading fails
+        unanalyzed_files = []
+        total_files = 0
 
     if total_files > 0:
         with ThreadPoolExecutor(max_workers=5) as executor:

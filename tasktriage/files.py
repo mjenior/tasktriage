@@ -167,23 +167,21 @@ def _load_task_notes_usb(notes_type: str = "daily", file_preference: str = "png"
                 # Extract text based on file type
                 suffix = notes_path.suffix.lower()
                 if suffix in VISUAL_EXTENSIONS:
-                    # Check for existing .raw_notes.txt file first
+                    # Visual files require .raw_notes.txt from Sync - skip if not converted
                     raw_notes_path = notes_path.parent / f"{timestamp}.raw_notes.txt"
                     if raw_notes_path.exists():
                         file_contents = raw_notes_path.read_text()
                     else:
-                        # Fall back to conversion if not synced yet
-                        if suffix == ".pdf":
-                            file_contents = extract_text_from_pdf(notes_path)
-                        else:
-                            file_contents = extract_text_from_image(notes_path)
+                        # Skip this file - needs to be synced/converted first
+                        continue
                 else:
                     file_contents = notes_path.read_text()
 
                 return file_contents, notes_path, file_date
 
     raise FileNotFoundError(
-        f"No unanalyzed notes files found in any configured input directory"
+        f"No unanalyzed notes files found in any configured input directory. "
+        f"For image/PDF files, run Sync first to convert them to text."
     )
 
 
@@ -261,16 +259,13 @@ def _load_all_unanalyzed_task_notes_usb(notes_type: str = "daily", file_preferen
                 # Extract text based on file type
                 suffix = notes_path.suffix.lower()
                 if suffix in VISUAL_EXTENSIONS:
-                    # Check for existing .raw_notes.txt file first
+                    # Visual files require .raw_notes.txt from Sync - skip if not converted
                     raw_notes_path = notes_path.parent / f"{timestamp}.raw_notes.txt"
                     if raw_notes_path.exists():
                         file_contents = raw_notes_path.read_text()
                     else:
-                        # Fall back to conversion if not synced yet
-                        if suffix == ".pdf":
-                            file_contents = extract_text_from_pdf(notes_path)
-                        else:
-                            file_contents = extract_text_from_image(notes_path)
+                        # Skip this file - needs to be synced/converted first
+                        continue
                 else:
                     file_contents = notes_path.read_text()
 
@@ -279,7 +274,8 @@ def _load_all_unanalyzed_task_notes_usb(notes_type: str = "daily", file_preferen
 
     if not unanalyzed_files:
         raise FileNotFoundError(
-            f"No unanalyzed notes files found in any configured input directory"
+            f"No unanalyzed notes files found in any configured input directory. "
+            f"For image/PDF files, run Sync first to convert them to text."
         )
 
     return unanalyzed_files
@@ -646,43 +642,17 @@ def _load_task_notes_gdrive(notes_type: str = "daily", file_preference: str = "p
 
         # Download and process the file
         if mime_type in VISUAL_MIME_TYPES:
-            # Check for existing .raw_notes.txt in LOCAL_OUTPUT_DIR first
+            # Visual files require .raw_notes.txt from Sync - skip if not converted
             if LOCAL_OUTPUT_DIR and timestamp:
                 raw_notes_path = Path(LOCAL_OUTPUT_DIR) / f"{timestamp}.raw_notes.txt"
                 if raw_notes_path.exists():
                     file_contents = raw_notes_path.read_text()
                 else:
-                    # Fall back to downloading and converting
-                    image_data = client.download_file(file_id)
-                    ext = get_file_extension(mime_type)
-
-                    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-                        tmp.write(image_data)
-                        tmp_path = Path(tmp.name)
-
-                    try:
-                        if mime_type in PDF_MIME_TYPES:
-                            file_contents = extract_text_from_pdf(tmp_path)
-                        else:
-                            file_contents = extract_text_from_image(tmp_path)
-                    finally:
-                        tmp_path.unlink()
+                    # Skip this file - needs to be synced/converted first
+                    continue
             else:
-                # No local output dir, download and convert directly
-                image_data = client.download_file(file_id)
-                ext = get_file_extension(mime_type)
-
-                with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-                    tmp.write(image_data)
-                    tmp_path = Path(tmp.name)
-
-                try:
-                    if mime_type in PDF_MIME_TYPES:
-                        file_contents = extract_text_from_pdf(tmp_path)
-                    else:
-                        file_contents = extract_text_from_image(tmp_path)
-                finally:
-                    tmp_path.unlink()
+                # No local output dir configured - skip visual files
+                continue
         else:
             # Download text file directly
             file_contents = client.download_file_text(file_id)
@@ -693,7 +663,8 @@ def _load_task_notes_gdrive(notes_type: str = "daily", file_preference: str = "p
         return file_contents, virtual_path, file_date
 
     raise FileNotFoundError(
-        f"No unanalyzed notes files found in Google Drive folder: {notes_type}/"
+        f"No unanalyzed notes files found in Google Drive folder: {notes_type}/. "
+        f"For image/PDF files, run Sync first to convert them to text."
     )
 
 
@@ -771,43 +742,17 @@ def _load_all_unanalyzed_task_notes_gdrive(notes_type: str = "daily", file_prefe
 
         # Download and process the file
         if mime_type in VISUAL_MIME_TYPES:
-            # Check for existing .raw_notes.txt in LOCAL_OUTPUT_DIR first
+            # Visual files require .raw_notes.txt from Sync - skip if not converted
             if LOCAL_OUTPUT_DIR and timestamp:
                 raw_notes_path = Path(LOCAL_OUTPUT_DIR) / f"{timestamp}.raw_notes.txt"
                 if raw_notes_path.exists():
                     file_contents = raw_notes_path.read_text()
                 else:
-                    # Fall back to downloading and converting
-                    image_data = client.download_file(file_id)
-                    ext = get_file_extension(mime_type)
-
-                    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-                        tmp.write(image_data)
-                        tmp_path = Path(tmp.name)
-
-                    try:
-                        if mime_type in PDF_MIME_TYPES:
-                            file_contents = extract_text_from_pdf(tmp_path)
-                        else:
-                            file_contents = extract_text_from_image(tmp_path)
-                    finally:
-                        tmp_path.unlink()
+                    # Skip this file - needs to be synced/converted first
+                    continue
             else:
-                # No local output dir, download and convert directly
-                image_data = client.download_file(file_id)
-                ext = get_file_extension(mime_type)
-
-                with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-                    tmp.write(image_data)
-                    tmp_path = Path(tmp.name)
-
-                try:
-                    if mime_type in PDF_MIME_TYPES:
-                        file_contents = extract_text_from_pdf(tmp_path)
-                    else:
-                        file_contents = extract_text_from_image(tmp_path)
-                finally:
-                    tmp_path.unlink()
+                # No local output dir configured - skip visual files
+                continue
         else:
             # Download text file directly
             file_contents = client.download_file_text(file_id)
@@ -819,7 +764,8 @@ def _load_all_unanalyzed_task_notes_gdrive(notes_type: str = "daily", file_prefe
 
     if not unanalyzed_files:
         raise FileNotFoundError(
-            f"No unanalyzed notes files found in Google Drive folder: {notes_type}/"
+            f"No unanalyzed notes files found in Google Drive folder: {notes_type}/. "
+            f"For image/PDF files, run Sync first to convert them to text."
         )
 
     return unanalyzed_files

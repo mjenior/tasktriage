@@ -81,51 +81,57 @@ def main():
         # =================================================================
         # LEVEL 1: DAILY ANALYSES
         # =================================================================
-        # Load all unanalyzed daily files
-        unanalyzed_files = load_all_unanalyzed_task_notes("daily", args.files)
-
-        print(f"Found {len(unanalyzed_files)} unanalyzed file(s)\n")
+        # Load all unanalyzed daily files (only those with .raw_notes.txt for images/PDFs)
+        try:
+            unanalyzed_files = load_all_unanalyzed_task_notes("daily", args.files)
+            print(f"Found {len(unanalyzed_files)} unanalyzed file(s)\n")
+        except FileNotFoundError as e:
+            # No unanalyzed files - this is OK, proceed to check weekly/monthly/annual
+            unanalyzed_files = []
+            print(f"No unanalyzed daily files found.")
+            print(f"  (Image/PDF files require Sync to be run first for conversion)\n")
 
         # Process files in parallel
         daily_successful = 0
         daily_failed = 0
 
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            # Submit all tasks
-            future_to_file = {
-                executor.submit(
-                    analyze_single_file,
-                    task_notes,
-                    notes_path,
-                    file_date,
-                    "daily"
-                ): notes_path
-                for task_notes, notes_path, file_date in unanalyzed_files
-            }
+        if unanalyzed_files:
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                # Submit all tasks
+                future_to_file = {
+                    executor.submit(
+                        analyze_single_file,
+                        task_notes,
+                        notes_path,
+                        file_date,
+                        "daily"
+                    ): notes_path
+                    for task_notes, notes_path, file_date in unanalyzed_files
+                }
 
-            # Process results as they complete
-            for future in as_completed(future_to_file):
-                notes_path, output_path, success, error_msg, _ = future.result()
+                # Process results as they complete
+                for future in as_completed(future_to_file):
+                    notes_path, output_path, success, error_msg, _ = future.result()
 
-                # Indicate if text was extracted from an image
-                if notes_path.suffix.lower() in IMAGE_EXTENSIONS:
-                    file_type = " (image)"
-                else:
-                    file_type = ""
+                    # Indicate if text was extracted from an image
+                    if notes_path.suffix.lower() in IMAGE_EXTENSIONS:
+                        file_type = " (image)"
+                    else:
+                        file_type = ""
 
-                if success:
-                    print(f"✓ Analyzed: {notes_path.name}{file_type}")
-                    print(f"  Saved to: {output_path}\n")
-                    daily_successful += 1
-                else:
-                    print(f"✗ Failed: {notes_path.name}{file_type}")
-                    print(f"  Error: {error_msg}\n")
-                    daily_failed += 1
+                    if success:
+                        print(f"✓ Analyzed: {notes_path.name}{file_type}")
+                        print(f"  Saved to: {output_path}\n")
+                        daily_successful += 1
+                    else:
+                        print(f"✗ Failed: {notes_path.name}{file_type}")
+                        print(f"  Error: {error_msg}\n")
+                        daily_failed += 1
 
-        # Print daily summary
-        print(f"\n{'='*50}")
-        print(f"Daily Summary: {daily_successful} successful, {daily_failed} failed")
-        print(f"{'='*50}")
+            # Print daily summary
+            print(f"\n{'='*50}")
+            print(f"Daily Summary: {daily_successful} successful, {daily_failed} failed")
+            print(f"{'='*50}")
 
         # =================================================================
         # LEVEL 2: WEEKLY ANALYSES (only if daily analyses completed)

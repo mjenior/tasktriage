@@ -19,15 +19,15 @@ You might have this feeling too: You write a semi-disorganized list(s) of daily 
 
 ## Features
 
-- Automatically finds ALL unanalyzed notes files and processes them in parallel (because who wants to manually track that?)
 - Handles text files (.txt), images (.png, .jpg, .jpeg, .gif, .webp), and PDFs (.pdf)
 - Extracts text from your handwritten notes using Claude's vision API—yes, even your terrible handwriting (including multi-page PDFs)
-- **Automatic raw text preservation**: When analyzing PNG or PDF notes, automatically saves the extracted text as `.raw_notes.txt` files for easy editing in the UI
+- **Two-step workflow**: Sync first to copy and convert files, then Analyze when you're ready
+- **Sync operation**: Copies raw notes from input directories and converts images/PDFs to editable `.raw_notes.txt` files using Claude's vision API
 - **Smart re-analysis**: Detects when notes files are edited after their initial analysis and automatically includes them for re-analysis, replacing old analyses
 - Works with local/USB directories or Google Drive (your choice)
 - Tweak Claude's model parameters via a simple YAML file
 - GTD-based prioritization with built-in workload guardrails that cap you at 6-7 hours of focused work per day (because burnout is bad, actually)
-- **Temporal hierarchy**: Daily → Weekly → Monthly → Annual, with automatic analysis triggering at each level
+- **Temporal hierarchy**: Daily analyses are on-demand; Weekly → Monthly → Annual analyses auto-trigger when conditions are met
 - Auto-triggers weekly analyses when you have 5+ weekday analyses or when the work week has passed
 - Auto-triggers monthly analyses when you have 4+ weekly analyses or when the calendar month has ended
 - Auto-triggers annual analyses when you have 12 monthly analyses or when the calendar year has ended with at least 1 monthly analysis
@@ -441,12 +441,14 @@ uv run streamlit run streamlit_app.py
 The UI opens in your browser at `http://localhost:8501` and provides:
 
 **Left Panel (Controls)**
-- **Triage Button** - Run the full analysis pipeline with real-time progress updates
-- **Sync Button** - Bidirectionally sync files between output and input directories
-  - **Outbound Sync**: Copies all analysis files (`.daily_analysis.txt`, `.weekly_analysis.txt`, etc.) and extracted raw notes (`.raw_notes.txt`) from output directory to all configured input directories (External/USB, Local, Google Drive)
-  - **Inbound Sync**: Copies any new files from input directories to the output directory that don't already exist there
+- **Sync Button** - The first step in the workflow:
+  1. Copies raw notes (images, PDFs, text files) from input directories to output directory
+  2. Converts images/PDFs to editable `.raw_notes.txt` files using Claude's vision API
+  3. Syncs all files (analyses, raw notes) back to input directories and Google Drive
   - Provides real-time progress updates and comprehensive error reporting
-  - Useful for keeping all your locations in sync and consolidating notes from multiple sources
+- **Analyze Button** - Run the analysis pipeline on synced/converted files
+  - Only processes files that have been synced (image/PDF files need their `.raw_notes.txt` created first)
+  - Automatically triggers weekly/monthly/annual analyses when their conditions are met
 - **Configuration** - Edit `.env` and `config.yaml` settings directly in the browser (API keys, notes source, model parameters)
 - **Raw Notes List** - Browse `.txt` and image files from your root notes directory, sorted by date
   - **Open** - Load a selected note file for editing
@@ -460,7 +462,10 @@ The UI opens in your browser at `http://localhost:8501` and provides:
 - Notes source status display
 - **Quick Markup Tools** - Easily add task markers (✓ completed, ✗ removed, ☆ urgent), which are automatically interpretted at the right side of each line.
 
-The web interface runs the same analysis pipeline as the CLI, with parallel processing and automatic triggering of weekly/monthly/annual analyses when conditions are met.
+**Recommended Workflow:**
+1. **Sync** - Import new files and convert images/PDFs to text
+2. **Review/Edit** - Check the extracted `.raw_notes.txt` files and fix any OCR errors
+3. **Analyze** - Generate daily analyses; weekly/monthly/annual analyses trigger automatically when conditions are met
 
 ### Output Directory and File Sync Workflow
 
@@ -493,28 +498,38 @@ This bidirectional workflow ensures that:
 - You have a true sync experience rather than one-directional file distribution
 
 **When to Use Sync:**
-- After running the Triage analysis to distribute results to your devices
+- **Before analyzing new image/PDF files** - Sync converts them to editable `.raw_notes.txt` files
+- **After running Analyze** - Distributes results to your devices and input directories
 - Periodically to ensure all your locations (USB, local, Google Drive) stay in sync
 - To consolidate notes from multiple input sources into your central output directory
-- To upload analyses to Google Drive when you have multiple outputs accumulated
 
 ### What Happens When You Run It
 
-TaskTriage follows a strict temporal hierarchy, ensuring each level completes before the next begins:
+TaskTriage uses a two-step workflow with automatic cascading for higher-level analyses:
 
-**LEVEL 1: Daily Analysis (runs automatically)**
+**STEP 1: Sync (run first)**
 
-1. TaskTriage finds ALL unanalyzed `.txt`, image, or PDF files in the root `Notes/` directory
-   - Includes files that have never been analyzed
-   - **Smart re-analysis**: Also includes files that were edited after their last analysis (detects changes by comparing file modification times)
-2. Processes them in parallel (up to 5 concurrent API calls)
-3. For images and PDFs, Claude's vision API extracts the text from your handwriting
+The Sync operation prepares your files for analysis:
+1. Copies raw notes (images, PDFs, text files) from all input directories to the output directory
+2. Converts images and PDFs to `.raw_notes.txt` files using Claude's vision API
    - **PDF Processing**: Multi-page PDFs are converted to images page-by-page, each page is processed, then all text is concatenated with page separators
-   - **Automatic preservation**: The extracted text is also saved as a `.raw_notes.txt` file for easy editing in the UI
-4. Each file gets analyzed and saved as `Notes/daily/{filename}.daily_analysis.txt`
+3. Syncs all files back to input directories and Google Drive
+
+**STEP 2: Analyze (when you're ready)**
+
+Daily analyses only run when you explicitly press the Analyze button:
+1. TaskTriage finds unanalyzed `.txt` files and `.raw_notes.txt` files (converted from images/PDFs)
+   - Image/PDF files without a corresponding `.raw_notes.txt` are skipped (run Sync first!)
+   - **Smart re-analysis**: Includes files that were edited after their last analysis
+2. Processes them in parallel (up to 5 concurrent API calls)
+3. Each file gets analyzed and saved as `Notes/daily/{filename}.daily_analysis.txt`
    - If re-analyzing an edited file, the new analysis **replaces** the old one (no duplicates)
-5. Shows progress in real-time with success/failure indicators
-6. Prints: `Daily Summary: X successful, Y failed`
+4. Shows progress in real-time with success/failure indicators
+5. Prints: `Daily Summary: X successful, Y failed`
+
+**AUTOMATIC CASCADE: Weekly/Monthly/Annual Analyses**
+
+After daily analyses complete, TaskTriage automatically checks for and triggers higher-level analyses:
 
 **LEVEL 2: Weekly Analysis (auto-triggers when conditions are met)**
 
@@ -555,7 +570,7 @@ When triggered:
 4. Saves to `Notes/annual/{year}.annual_analysis.txt`
 5. Prints: `Annual Summary: X successful, Y failed`
 
-You don't have to trigger any of these manually—TaskTriage handles the entire hierarchy automatically!
+**Summary**: Daily analyses require explicit triggering (Sync → Analyze), but weekly/monthly/annual analyses cascade automatically once their conditions are met!
 
 ## Daily Analysis Output
 
