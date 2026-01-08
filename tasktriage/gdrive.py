@@ -285,7 +285,7 @@ def parse_filename_datetime(filename: str) -> datetime | None:
     Handles variations like:
         - YYYYMMDD_HHMMSS.ext (e.g., 20251225_073454.txt)
         - YYYYMMDD_HHMMSS_Page_N.ext (e.g., 20251225_073454_Page_1.png)
-        - YYYYMMDD_HHMMSS.daily_analysis.txt (analysis files)
+        - DD_MM_YYYY.triaged.txt (daily analysis files)
 
     Args:
         filename: Filename with timestamp prefix

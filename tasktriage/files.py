@@ -5,7 +5,6 @@ Handles loading task notes, collecting analyses, and saving output files.
 Supports both local USB directory and Google Drive as sources.
 """
 
-import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -13,22 +12,30 @@ from .config import get_active_source, get_all_input_directories, get_primary_in
 from .gdrive import parse_filename_datetime
 from .image import extract_text_from_image, extract_text_from_pdf, VISUAL_EXTENSIONS
 
-# Backward compatibility: USB_DIR references the primary input directory
-# This allows existing code to work while we transition to multi-source reading
-def _get_usb_dir():
-    """Get the primary input directory (for backward compatibility with USB_DIR references)."""
-    try:
-        return str(get_primary_input_directory())
-    except ValueError:
-        return None
-
-USB_DIR = _get_usb_dir()
-
 # Supported text file extensions
 TEXT_EXTENSIONS = {".txt"}
 
 # All supported input file extensions (text + images + PDFs)
 ALL_EXTENSIONS = TEXT_EXTENSIONS | VISUAL_EXTENSIONS
+
+
+def _get_week_of_month(date: datetime) -> int:
+    """Calculate which week of the month a date falls into (1-4).
+
+    Week 1: Days 1-7
+    Week 2: Days 8-14
+    Week 3: Days 15-21
+    Week 4: Days 22-31
+    """
+    day = date.day
+    if day <= 7:
+        return 1
+    elif day <= 14:
+        return 2
+    elif day <= 21:
+        return 3
+    else:
+        return 4
 
 
 def _extract_timestamp(filename: str) -> str | None:
@@ -143,8 +150,8 @@ def _load_task_notes_usb(notes_type: str = "daily", file_preference: str = "png"
         all_files = sorted(all_files, reverse=True)
 
         for notes_path in all_files:
-            # Skip files that are already analysis files
-            if "_analysis" in notes_path.name:
+            # Skip files that are already analysis files (both old and new naming)
+            if "_analysis" in notes_path.name or ".triaged." in notes_path.name:
                 continue
 
             # Extract timestamp from filename (handles page identifiers)
@@ -153,9 +160,29 @@ def _load_task_notes_usb(notes_type: str = "daily", file_preference: str = "png"
                 continue
 
             # Check if this file already has an associated analysis file
-            # Use timestamp only so all pages of a multi-page note share one analysis
-            analysis_filename = f"{timestamp}.{notes_type}_analysis.txt"
-            analysis_path = notes_dir / analysis_filename
+            # Use appropriate date format based on analysis type
+            try:
+                ts_date = datetime.strptime(timestamp[:8], "%Y%m%d")
+                if notes_type == "daily":
+                    date_str = ts_date.strftime("%d_%m_%Y")  # DD_MM_YYYY
+                elif notes_type == "weekly":
+                    week_num = _get_week_of_month(ts_date)
+                    date_str = f"week{week_num}_{ts_date.strftime('%m_%Y')}"  # weekX_MM_YYYY
+                elif notes_type == "monthly":
+                    date_str = ts_date.strftime("%m_%Y")  # MM_YYYY
+                elif notes_type == "annual":
+                    date_str = ts_date.strftime("%Y")  # YYYY
+                else:
+                    date_str = ts_date.strftime("%d_%m_%Y")  # Default to DD_MM_YYYY
+            except ValueError:
+                continue
+            # All analysis types now use "triaged" naming
+            analysis_filename = f"{date_str}.triaged.txt"
+            # Analysis files are in subdirectories, not at the same level as raw notes
+            if notes_type in ["daily", "weekly", "monthly", "annual"]:
+                analysis_path = notes_path.parent / notes_type / analysis_filename
+            else:
+                analysis_path = notes_dir / analysis_filename
 
             # Include file if: no analysis exists OR file was modified after analysis
             if not analysis_path.exists() or _needs_reanalysis_usb(notes_path, analysis_path):
@@ -231,8 +258,8 @@ def _load_all_unanalyzed_task_notes_usb(notes_type: str = "daily", file_preferen
         all_files = sorted(all_files, reverse=True)
 
         for notes_path in all_files:
-            # Skip files that are already analysis files
-            if "_analysis" in notes_path.name:
+            # Skip files that are already analysis files (both old and new naming)
+            if "_analysis" in notes_path.name or ".triaged." in notes_path.name:
                 continue
 
             # Extract timestamp from filename (handles page identifiers)
@@ -245,9 +272,29 @@ def _load_all_unanalyzed_task_notes_usb(notes_type: str = "daily", file_preferen
                 continue
 
             # Check if this file already has an associated analysis file
-            # Use timestamp only so all pages of a multi-page note share one analysis
-            analysis_filename = f"{timestamp}.{notes_type}_analysis.txt"
-            analysis_path = notes_dir / analysis_filename
+            # Use appropriate date format based on analysis type
+            try:
+                ts_date = datetime.strptime(timestamp[:8], "%Y%m%d")
+                if notes_type == "daily":
+                    date_str = ts_date.strftime("%d_%m_%Y")  # DD_MM_YYYY
+                elif notes_type == "weekly":
+                    week_num = _get_week_of_month(ts_date)
+                    date_str = f"week{week_num}_{ts_date.strftime('%m_%Y')}"  # weekX_MM_YYYY
+                elif notes_type == "monthly":
+                    date_str = ts_date.strftime("%m_%Y")  # MM_YYYY
+                elif notes_type == "annual":
+                    date_str = ts_date.strftime("%Y")  # YYYY
+                else:
+                    date_str = ts_date.strftime("%d_%m_%Y")  # Default to DD_MM_YYYY
+            except ValueError:
+                continue
+            # All analysis types now use "triaged" naming
+            analysis_filename = f"{date_str}.triaged.txt"
+            # Analysis files are in subdirectories, not at the same level as raw notes
+            if notes_type in ["daily", "weekly", "monthly", "annual"]:
+                analysis_path = notes_path.parent / notes_type / analysis_filename
+            else:
+                analysis_path = notes_dir / analysis_filename
 
             # Include file if: no analysis exists OR file was modified after analysis
             if not analysis_path.exists() or _needs_reanalysis_usb(notes_path, analysis_path):
@@ -311,14 +358,16 @@ def _collect_weekly_analyses_usb_for_week(week_start: datetime, week_end: dateti
         if not daily_dir.exists():
             continue
 
-        # Find all daily_analysis files from the specified week
-        analysis_files = sorted(daily_dir.glob("*.daily_analysis.txt"))
+        # Find all triaged files from the specified week (DD_MM_YYYY.triaged.txt for daily)
+        analysis_files = sorted(daily_dir.glob("*.triaged.txt"))
 
         for analysis_path in analysis_files:
             try:
                 date_str = analysis_path.stem.split(".")[0]
-                file_date = datetime.strptime(date_str, "%Y%m%d_%H%M%S")
+                # Parse DD_MM_YYYY format for daily analyses
+                file_date = datetime.strptime(date_str, "%d_%m_%Y")
             except ValueError:
+                # Skip if not in expected format
                 continue
 
             # Skip if we've already seen this timestamp
@@ -367,10 +416,26 @@ def _save_analysis_usb(analysis: str, input_path: Path, notes_type: str = "daily
     # Extract timestamp from filename (handles page identifiers)
     timestamp = _extract_timestamp(input_path.name)
     if timestamp:
-        output_filename = f"{timestamp}.{notes_type}_analysis.txt"
+        # Convert timestamp to appropriate date format based on analysis type
+        try:
+            ts_date = datetime.strptime(timestamp[:8], "%Y%m%d")
+            if notes_type == "daily":
+                date_str = ts_date.strftime("%d_%m_%Y")  # DD_MM_YYYY
+            elif notes_type == "weekly":
+                date_str = ts_date.strftime("%d_%m_%Y")  # DD_MM_YYYY (Monday of week)
+            elif notes_type == "monthly":
+                date_str = ts_date.strftime("%m_%Y")  # MM_YYYY
+            elif notes_type == "annual":
+                date_str = ts_date.strftime("%Y")  # YYYY
+            else:
+                date_str = ts_date.strftime("%d_%m_%Y")  # Default to DD_MM_YYYY
+        except ValueError:
+            date_str = timestamp[:8]  # Fallback to raw date portion
+        # All analysis types now use "triaged" naming
+        output_filename = f"{date_str}.triaged.txt"
     else:
         # Fallback to full stem if timestamp extraction fails
-        output_filename = f"{input_path.stem}.{notes_type}_analysis.txt"
+        output_filename = f"{input_path.stem}.triaged.txt"
 
     # Determine output directory based on analysis type
     # Raw notes are at top level, but analyses go to subdirectories
@@ -381,7 +446,7 @@ def _save_analysis_usb(analysis: str, input_path: Path, notes_type: str = "daily
 
     output_path = output_dir / output_filename
 
-    header = f"{notes_type.capitalize()} Task Analysis"
+    header = "Triaged Tasks"
     formatted_output = f"{header}\n{'=' * 40}\n\n{analysis}\n"
 
     output_path.write_text(formatted_output)
@@ -523,7 +588,7 @@ def _analysis_exists_locally(notes_type: str, analysis_filename: str) -> bool:
 
     Args:
         notes_type: Type of notes ("daily" or "weekly")
-        analysis_filename: Name of the analysis file to check
+        analysis_filename: Name of the analysis file to check (uses new naming: DD_MM_YYYY.triaged.txt for daily)
 
     Returns:
         True if the analysis file exists locally
@@ -533,7 +598,9 @@ def _analysis_exists_locally(notes_type: str, analysis_filename: str) -> bool:
     if not LOCAL_OUTPUT_DIR:
         return False
 
-    analysis_path = Path(LOCAL_OUTPUT_DIR) / notes_type / analysis_filename
+    # For daily notes, use the "daily" subdirectory
+    subdir = notes_type if notes_type in ["daily", "weekly", "monthly", "annual"] else notes_type
+    analysis_path = Path(LOCAL_OUTPUT_DIR) / subdir / analysis_filename
     return analysis_path.exists()
 
 
@@ -545,7 +612,7 @@ def _needs_reanalysis_gdrive(notes_type: str, timestamp: str, file_info: dict) -
 
     Args:
         notes_type: Type of notes ("daily" or "weekly")
-        timestamp: The extracted timestamp from the filename
+        timestamp: The extracted timestamp from the filename (YYYYMMDD_HHMMSS format)
         file_info: Google Drive file info dict with 'modifiedTime'
 
     Returns:
@@ -556,14 +623,31 @@ def _needs_reanalysis_gdrive(notes_type: str, timestamp: str, file_info: dict) -
     if not LOCAL_OUTPUT_DIR:
         return False  # Can't check modification times without local files
 
-    analysis_path = Path(LOCAL_OUTPUT_DIR) / notes_type / f"{timestamp}.{notes_type}_analysis.txt"
+    # Convert timestamp to appropriate date format based on analysis type
+    try:
+        ts_date = datetime.strptime(timestamp[:8], "%Y%m%d")
+        if notes_type == "daily":
+            date_str = ts_date.strftime("%d_%m_%Y")  # DD_MM_YYYY
+        elif notes_type == "weekly":
+            date_str = ts_date.strftime("%d_%m_%Y")  # DD_MM_YYYY (Monday of week)
+        elif notes_type == "monthly":
+            date_str = ts_date.strftime("%m_%Y")  # MM_YYYY
+        elif notes_type == "annual":
+            date_str = ts_date.strftime("%Y")  # YYYY
+        else:
+            date_str = ts_date.strftime("%d_%m_%Y")  # Default to DD_MM_YYYY
+    except ValueError:
+        return False
+
+    # All analysis types now use "triaged" naming
+    analysis_path = Path(LOCAL_OUTPUT_DIR) / notes_type / f"{date_str}.triaged.txt"
     if not analysis_path.exists():
         return False  # No analysis exists, not a "re-analysis" case
 
     analysis_mtime = analysis_path.stat().st_mtime
 
     # Check if the local raw_notes.txt was edited after the analysis
-    raw_notes_path = Path(LOCAL_OUTPUT_DIR) / notes_type / f"{timestamp}.raw_notes.txt"
+    raw_notes_path = Path(LOCAL_OUTPUT_DIR) / f"{timestamp}.raw_notes.txt"
     if raw_notes_path.exists() and raw_notes_path.stat().st_mtime > analysis_mtime:
         return True
 
@@ -599,8 +683,8 @@ def _load_task_notes_gdrive(notes_type: str = "daily", file_preference: str = "p
         file_id = file_info["id"]
         mime_type = file_info["mimeType"]
 
-        # Skip analysis files
-        if "_analysis" in filename:
+        # Skip analysis files (both old and new naming)
+        if "_analysis" in filename or ".triaged." in filename:
             continue
 
         # Filter by file type preference
@@ -618,15 +702,32 @@ def _load_task_notes_gdrive(notes_type: str = "daily", file_preference: str = "p
             continue
 
         # Check if analysis already exists
-        # Use timestamp only so all pages of a multi-page note share one analysis
+        # Use appropriate date format based on analysis type
         timestamp = extract_timestamp_from_filename(filename)
         if timestamp:
-            analysis_filename = f"{timestamp}.{notes_type}_analysis.txt"
+            # Convert timestamp to appropriate date format
+            try:
+                ts_date = datetime.strptime(timestamp[:8], "%Y%m%d")
+                if notes_type == "daily":
+                    date_str = ts_date.strftime("%d_%m_%Y")  # DD_MM_YYYY
+                elif notes_type == "weekly":
+                    week_num = _get_week_of_month(ts_date)
+                    date_str = f"week{week_num}_{ts_date.strftime('%m_%Y')}"  # weekX_MM_YYYY
+                elif notes_type == "monthly":
+                    date_str = ts_date.strftime("%m_%Y")  # MM_YYYY
+                elif notes_type == "annual":
+                    date_str = ts_date.strftime("%Y")  # YYYY
+                else:
+                    date_str = ts_date.strftime("%d_%m_%Y")  # Default to DD_MM_YYYY
+            except ValueError:
+                continue
+            # All analysis types now use "triaged" naming
+            analysis_filename = f"{date_str}.triaged.txt"
         else:
             stem = Path(filename).stem
             if "." in stem:
                 stem = stem.split(".")[0]
-            analysis_filename = f"{stem}.{notes_type}_analysis.txt"
+            analysis_filename = f"{stem}.triaged.txt"
 
         # Check local output directory first (when LOCAL_OUTPUT_DIR is set)
         # Skip if analysis exists AND no re-analysis is needed
@@ -699,8 +800,8 @@ def _load_all_unanalyzed_task_notes_gdrive(notes_type: str = "daily", file_prefe
         file_id = file_info["id"]
         mime_type = file_info["mimeType"]
 
-        # Skip analysis files
-        if "_analysis" in filename:
+        # Skip analysis files (both old and new naming)
+        if "_analysis" in filename or ".triaged." in filename:
             continue
 
         # Filter by file type preference
@@ -718,15 +819,32 @@ def _load_all_unanalyzed_task_notes_gdrive(notes_type: str = "daily", file_prefe
             continue
 
         # Check if analysis already exists
-        # Use timestamp only so all pages of a multi-page note share one analysis
+        # Use appropriate date format based on analysis type
         timestamp = extract_timestamp_from_filename(filename)
         if timestamp:
-            analysis_filename = f"{timestamp}.{notes_type}_analysis.txt"
+            # Convert timestamp to appropriate date format
+            try:
+                ts_date = datetime.strptime(timestamp[:8], "%Y%m%d")
+                if notes_type == "daily":
+                    date_str = ts_date.strftime("%d_%m_%Y")  # DD_MM_YYYY
+                elif notes_type == "weekly":
+                    week_num = _get_week_of_month(ts_date)
+                    date_str = f"week{week_num}_{ts_date.strftime('%m_%Y')}"  # weekX_MM_YYYY
+                elif notes_type == "monthly":
+                    date_str = ts_date.strftime("%m_%Y")  # MM_YYYY
+                elif notes_type == "annual":
+                    date_str = ts_date.strftime("%Y")  # YYYY
+                else:
+                    date_str = ts_date.strftime("%d_%m_%Y")  # Default to DD_MM_YYYY
+            except ValueError:
+                continue
+            # All analysis types now use "triaged" naming
+            analysis_filename = f"{date_str}.triaged.txt"
         else:
             stem = Path(filename).stem
             if "." in stem:
                 stem = stem.split(".")[0]
-            analysis_filename = f"{stem}.{notes_type}_analysis.txt"
+            analysis_filename = f"{stem}.triaged.txt"
 
         # Check local output directory first (when LOCAL_OUTPUT_DIR is set)
         # Skip if analysis exists AND no re-analysis is needed
@@ -795,12 +913,16 @@ def _collect_weekly_analyses_gdrive_for_week(week_start: datetime, week_end: dat
     for file_info in sorted(files, key=lambda x: x["name"]):
         filename = file_info["name"]
 
-        # Only process analysis files
-        if ".daily_analysis.txt" not in filename:
+        # Only process triaged files (new naming: DD_MM_YYYY.triaged.txt)
+        if ".triaged.txt" not in filename:
             continue
 
-        file_date = parse_filename_datetime(filename)
-        if not file_date:
+        # Parse date format from triaged files (DD_MM_YYYY for daily)
+        try:
+            date_str = filename.split(".")[0]
+            file_date = datetime.strptime(date_str, "%d_%m_%Y")
+        except ValueError:
+            # Skip if not in expected format
             continue
 
         if week_start <= file_date <= week_end:
@@ -810,7 +932,7 @@ def _collect_weekly_analyses_gdrive_for_week(week_start: datetime, week_end: dat
 
     if not collected_analyses:
         raise FileNotFoundError(
-            f"No daily analysis files found for the week of "
+            f"No triaged files found for the week of "
             f"{week_start.strftime('%Y-%m-%d')} to {week_end.strftime('%Y-%m-%d')}"
         )
 
@@ -844,16 +966,32 @@ def _save_analysis_gdrive(analysis: str, input_path: Path, notes_type: str = "da
     # Extract timestamp (handles page identifiers)
     timestamp = extract_timestamp_from_filename(filename)
     if timestamp:
-        stem = timestamp
+        # Convert timestamp to appropriate date format based on analysis type
+        try:
+            ts_date = datetime.strptime(timestamp[:8], "%Y%m%d")
+            if notes_type == "daily":
+                date_str = ts_date.strftime("%d_%m_%Y")  # DD_MM_YYYY
+            elif notes_type == "weekly":
+                date_str = ts_date.strftime("%d_%m_%Y")  # DD_MM_YYYY (Monday of week)
+            elif notes_type == "monthly":
+                date_str = ts_date.strftime("%m_%Y")  # MM_YYYY
+            elif notes_type == "annual":
+                date_str = ts_date.strftime("%Y")  # YYYY
+            else:
+                date_str = ts_date.strftime("%d_%m_%Y")  # Default to DD_MM_YYYY
+        except ValueError:
+            date_str = timestamp[:8]  # Fallback to raw date portion
     else:
         # Fallback: extract stem and handle special cases
         stem = Path(filename).stem
-        if "." in stem and "_analysis" not in stem:
+        if "." in stem and "_analysis" not in stem and ".triaged" not in stem:
             stem = stem.split(".")[0]
+        date_str = stem
 
-    output_filename = f"{stem}.{notes_type}_analysis.txt"
+    # All analysis types now use "triaged" naming
+    output_filename = f"{date_str}.triaged.txt"
 
-    header = f"{notes_type.capitalize()} Task Analysis"
+    header = "Triaged Tasks"
     formatted_output = f"{header}\n{'=' * 40}\n\n{analysis}\n"
 
     # Determine target folder based on analysis type
@@ -1044,7 +1182,7 @@ def _weekly_analysis_exists(week_start: datetime) -> bool:
         True if weekly analysis exists, False otherwise
     """
     source = get_active_source()
-    week_label = week_start.strftime("%Y%m%d")
+    week_label = week_start.strftime("%d_%m_%Y")  # DD_MM_YYYY format matches save function
 
     if source == "gdrive":
         from .gdrive import GoogleDriveClient
@@ -1052,19 +1190,23 @@ def _weekly_analysis_exists(week_start: datetime) -> bool:
 
         # Check local output directory first
         if LOCAL_OUTPUT_DIR:
-            analysis_path = Path(LOCAL_OUTPUT_DIR) / "weekly" / f"{week_label}.weekly_analysis.txt"
+            analysis_path = Path(LOCAL_OUTPUT_DIR) / "weekly" / f"{week_label}.triaged.txt"
             if analysis_path.exists():
                 return True
 
         # Check Google Drive
         client = GoogleDriveClient()
-        return client.file_exists("weekly", f"{week_label}.weekly_analysis.txt")
+        return client.file_exists("weekly", f"{week_label}.triaged.txt")
     else:
         # Check USB/local directory
-        weekly_dir = Path(USB_DIR) / "weekly"
+        try:
+            base_dir = get_primary_input_directory()
+        except ValueError:
+            return False
+        weekly_dir = base_dir / "weekly"
         if not weekly_dir.exists():
             return False
-        analysis_path = weekly_dir / f"{week_label}.weekly_analysis.txt"
+        analysis_path = weekly_dir / f"{week_label}.triaged.txt"
         return analysis_path.exists()
 
 
@@ -1090,17 +1232,31 @@ def _find_weeks_needing_analysis() -> list[tuple[datetime, datetime]]:
 
         for file_info in files:
             filename = file_info["name"]
-            if ".daily_analysis.txt" in filename:
-                file_date = parse_filename_datetime(filename)
-                if file_date:
+            if ".triaged.txt" in filename:
+                # Parse DD_MM_YYYY format from daily triaged files
+                try:
+                    date_str = filename.split(".")[0]
+                    file_date = datetime.strptime(date_str, "%d_%m_%Y")
                     analysis_dates.append(file_date)
+                except ValueError:
+                    # Skip if not in expected format
+                    continue
     else:
-        daily_dir = Path(USB_DIR) / "daily"
-        if daily_dir.exists():
-            for analysis_file in daily_dir.glob("*.daily_analysis.txt"):
-                file_date = parse_filename_datetime(analysis_file.name)
-                if file_date:
-                    analysis_dates.append(file_date)
+        try:
+            base_dir = get_primary_input_directory()
+            daily_dir = base_dir / "daily"
+            if daily_dir.exists():
+                for analysis_file in daily_dir.glob("*.triaged.txt"):
+                    # Parse DD_MM_YYYY format from daily triaged files
+                    try:
+                        date_str = analysis_file.stem.split(".")[0]
+                        file_date = datetime.strptime(date_str, "%d_%m_%Y")
+                        analysis_dates.append(file_date)
+                    except ValueError:
+                        # Skip if not in expected format
+                        continue
+        except ValueError:
+            pass  # No primary directory configured
 
     if not analysis_dates:
         return []
@@ -1209,12 +1365,13 @@ def _collect_monthly_analyses_usb_for_month(month_start: datetime, month_end: da
     Returns:
         Tuple of (combined analysis text, output path, month start, month end)
     """
-    base_dir = Path(USB_DIR)
+    try:
+        base_dir = get_primary_input_directory()
+    except ValueError:
+        raise FileNotFoundError("No primary input directory configured")
 
     if not base_dir.exists():
-        raise FileNotFoundError(
-            f"USB directory not found: {USB_DIR}"
-        )
+        raise FileNotFoundError(f"Input directory not found: {base_dir}")
 
     weekly_dir = base_dir / "weekly"
     monthly_dir = base_dir / "monthly"
@@ -1224,14 +1381,14 @@ def _collect_monthly_analyses_usb_for_month(month_start: datetime, month_end: da
 
     monthly_dir.mkdir(exist_ok=True)
 
-    # Find all weekly_analysis files from the specified month
-    analysis_files = sorted(weekly_dir.glob("*.weekly_analysis.txt"))
+    # Find all weekly triaged files from the specified month (DD_MM_YYYY.triaged.txt format)
+    analysis_files = sorted(weekly_dir.glob("*.triaged.txt"))
 
     collected_analyses = []
     for analysis_path in analysis_files:
         try:
-            date_str = analysis_path.stem.split(".")[0]
-            file_date = datetime.strptime(date_str, "%Y%m%d")
+            date_str = analysis_path.stem.split(".")[0]  # Get DD_MM_YYYY part
+            file_date = datetime.strptime(date_str, "%d_%m_%Y")
         except ValueError:
             continue
 
@@ -1249,7 +1406,7 @@ def _collect_monthly_analyses_usb_for_month(month_start: datetime, month_end: da
         )
 
     combined_text = "\n\n---\n\n".join(collected_analyses)
-    month_label = month_start.strftime("%Y%m")
+    month_label = month_start.strftime("%m_%Y")  # MM_YYYY format matches save function
     output_path = monthly_dir / f"{month_label}.month.txt"
 
     return combined_text, output_path, month_start, month_end
@@ -1276,7 +1433,7 @@ def _collect_monthly_analyses_gdrive_for_month(month_start: datetime, month_end:
         filename = file_info["name"]
         file_id = file_info["id"]
 
-        if ".weekly_analysis.txt" not in filename:
+        if ".triaged.txt" not in filename:
             continue
 
         file_date = parse_filename_datetime(filename)
@@ -1297,16 +1454,16 @@ def _collect_monthly_analyses_gdrive_for_month(month_start: datetime, month_end:
         )
 
     combined_text = "\n\n---\n\n".join(collected_analyses)
-    month_label = month_start.strftime("%Y%m")
+    month_label = month_start.strftime("%m_%Y")  # MM_YYYY format matches save function
 
     # Use local output directory if configured
     if LOCAL_OUTPUT_DIR:
         monthly_dir = Path(LOCAL_OUTPUT_DIR) / "monthly"
         monthly_dir.mkdir(parents=True, exist_ok=True)
-        output_path = monthly_dir / f"{month_label}.monthly_analysis.txt"
+        output_path = monthly_dir / f"{month_label}.month.txt"
     else:
         # Virtual path for compatibility
-        output_path = Path(f"gdrive://monthly/{month_label}.monthly_analysis.txt")
+        output_path = Path(f"gdrive://monthly/{month_label}.month.txt")
 
     return combined_text, output_path, month_start, month_end
 
@@ -1321,7 +1478,7 @@ def _monthly_analysis_exists(month_start: datetime) -> bool:
         True if monthly analysis exists, False otherwise
     """
     source = get_active_source()
-    month_label = month_start.strftime("%Y%m")
+    month_label = month_start.strftime("%m_%Y")  # MM_YYYY format matches save function
 
     if source == "gdrive":
         from .gdrive import GoogleDriveClient
@@ -1329,19 +1486,23 @@ def _monthly_analysis_exists(month_start: datetime) -> bool:
 
         # Check local output directory first
         if LOCAL_OUTPUT_DIR:
-            analysis_path = Path(LOCAL_OUTPUT_DIR) / "monthly" / f"{month_label}.monthly_analysis.txt"
+            analysis_path = Path(LOCAL_OUTPUT_DIR) / "monthly" / f"{month_label}.triaged.txt"
             if analysis_path.exists():
                 return True
 
         # Check Google Drive
         client = GoogleDriveClient()
-        return client.file_exists("monthly", f"{month_label}.monthly_analysis.txt")
+        return client.file_exists("monthly", f"{month_label}.triaged.txt")
     else:
         # Check USB/local directory
-        monthly_dir = Path(USB_DIR) / "monthly"
+        try:
+            base_dir = get_primary_input_directory()
+        except ValueError:
+            return False
+        monthly_dir = base_dir / "monthly"
         if not monthly_dir.exists():
             return False
-        analysis_path = monthly_dir / f"{month_label}.monthly_analysis.txt"
+        analysis_path = monthly_dir / f"{month_label}.triaged.txt"
         return analysis_path.exists()
 
 
@@ -1357,7 +1518,7 @@ def _find_months_needing_analysis() -> list[tuple[datetime, datetime]]:
     """
     source = get_active_source()
 
-    # Collect all weekly analysis files and their dates
+    # Collect all weekly triaged files and their dates
     analysis_dates = []
 
     if source == "gdrive":
@@ -1367,17 +1528,25 @@ def _find_months_needing_analysis() -> list[tuple[datetime, datetime]]:
 
         for file_info in files:
             filename = file_info["name"]
-            if ".weekly_analysis.txt" in filename:
+            if ".triaged.txt" in filename:
                 file_date = parse_filename_datetime(filename)
                 if file_date:
                     analysis_dates.append(file_date)
     else:
-        weekly_dir = Path(USB_DIR) / "weekly"
-        if weekly_dir.exists():
-            for analysis_file in weekly_dir.glob("*.weekly_analysis.txt"):
-                file_date = parse_filename_datetime(analysis_file.name)
-                if file_date:
-                    analysis_dates.append(file_date)
+        try:
+            base_dir = get_primary_input_directory()
+            weekly_dir = base_dir / "weekly"
+            if weekly_dir.exists():
+                for analysis_file in weekly_dir.glob("*.triaged.txt"):
+                    # Parse DD_MM_YYYY format from weekly triaged files
+                    try:
+                        date_str = analysis_file.stem.split(".")[0]
+                        file_date = datetime.strptime(date_str, "%d_%m_%Y")
+                        analysis_dates.append(file_date)
+                    except ValueError:
+                        continue
+        except ValueError:
+            pass  # No primary directory configured
 
     if not analysis_dates:
         return []
@@ -1458,10 +1627,13 @@ def _collect_annual_analyses_usb_for_year(year: int) -> tuple[str, Path, int]:
     Returns:
         Tuple of (combined analysis text, output path, year)
     """
-    base_dir = Path(USB_DIR)
+    try:
+        base_dir = get_primary_input_directory()
+    except ValueError:
+        raise FileNotFoundError("No primary input directory configured")
 
     if not base_dir.exists():
-        raise FileNotFoundError(f"USB directory not found: {USB_DIR}")
+        raise FileNotFoundError(f"Input directory not found: {base_dir}")
 
     monthly_dir = base_dir / "monthly"
     annual_dir = base_dir / "annual"
@@ -1471,15 +1643,16 @@ def _collect_annual_analyses_usb_for_year(year: int) -> tuple[str, Path, int]:
 
     annual_dir.mkdir(exist_ok=True)
 
-    # Find all monthly_analysis files from the specified year
-    analysis_files = sorted(monthly_dir.glob("*.monthly_analysis.txt"))
+    # Find all monthly triaged files from the specified year (MM_YYYY.triaged.txt format)
+    analysis_files = sorted(monthly_dir.glob("*.triaged.txt"))
 
     collected_analyses = []
     for analysis_path in analysis_files:
         try:
-            date_str = analysis_path.stem.split(".")[0]
-            file_year = int(date_str[:4])
-            file_month = int(date_str[4:6])
+            date_str = analysis_path.stem.split(".")[0]  # Get MM_YYYY part
+            file_date = datetime.strptime(date_str, "%m_%Y")
+            file_year = file_date.year
+            file_month = file_date.month
         except (ValueError, IndexError):
             continue
 
@@ -1519,7 +1692,7 @@ def _collect_annual_analyses_gdrive_for_year(year: int) -> tuple[str, Path, int]
         filename = file_info["name"]
         file_id = file_info["id"]
 
-        if ".monthly_analysis.txt" not in filename:
+        if ".triaged.txt" not in filename:
             continue
 
         file_date = parse_filename_datetime(filename)
@@ -1539,10 +1712,10 @@ def _collect_annual_analyses_gdrive_for_year(year: int) -> tuple[str, Path, int]
     if LOCAL_OUTPUT_DIR:
         annual_dir = Path(LOCAL_OUTPUT_DIR) / "annual"
         annual_dir.mkdir(parents=True, exist_ok=True)
-        output_path = annual_dir / f"{year}.annual_analysis.txt"
+        output_path = annual_dir / f"{year}.annual.txt"
     else:
         # Virtual path for compatibility
-        output_path = Path(f"gdrive://annual/{year}.annual_analysis.txt")
+        output_path = Path(f"gdrive://annual/{year}.annual.txt")
 
     return combined_text, output_path, year
 
@@ -1564,19 +1737,23 @@ def _annual_analysis_exists(year: int) -> bool:
 
         # Check local output directory first
         if LOCAL_OUTPUT_DIR:
-            analysis_path = Path(LOCAL_OUTPUT_DIR) / "annual" / f"{year}.annual_analysis.txt"
+            analysis_path = Path(LOCAL_OUTPUT_DIR) / "annual" / f"{year}.triaged.txt"
             if analysis_path.exists():
                 return True
 
         # Check Google Drive
         client = GoogleDriveClient()
-        return client.file_exists("annual", f"{year}.annual_analysis.txt")
+        return client.file_exists("annual", f"{year}.triaged.txt")
     else:
         # Check USB/local directory
-        annual_dir = Path(USB_DIR) / "annual"
+        try:
+            base_dir = get_primary_input_directory()
+        except ValueError:
+            return False
+        annual_dir = base_dir / "annual"
         if not annual_dir.exists():
             return False
-        analysis_path = annual_dir / f"{year}.annual_analysis.txt"
+        analysis_path = annual_dir / f"{year}.triaged.txt"
         return analysis_path.exists()
 
 
@@ -1592,7 +1769,7 @@ def _find_years_needing_analysis() -> list[int]:
     """
     source = get_active_source()
 
-    # Collect all monthly analysis files and their years
+    # Collect all monthly triaged files and their years
     analysis_years = {}  # year -> count
 
     try:
@@ -1603,21 +1780,27 @@ def _find_years_needing_analysis() -> list[int]:
 
             for file_info in files:
                 filename = file_info["name"]
-                if ".monthly_analysis.txt" in filename:
+                if ".triaged.txt" in filename:
                     file_date = parse_filename_datetime(filename)
                     if file_date:
                         year = file_date.year
                         analysis_years[year] = analysis_years.get(year, 0) + 1
         else:
-            monthly_dir = Path(USB_DIR) / "monthly"
-            if monthly_dir.exists():
-                for analysis_file in monthly_dir.glob("*.monthly_analysis.txt"):
-                    try:
-                        date_str = analysis_file.stem.split(".")[0]
-                        year = int(date_str[:4])
-                        analysis_years[year] = analysis_years.get(year, 0) + 1
-                    except (ValueError, IndexError):
-                        continue
+            try:
+                base_dir = get_primary_input_directory()
+                monthly_dir = base_dir / "monthly"
+                if monthly_dir.exists():
+                    for analysis_file in monthly_dir.glob("*.triaged.txt"):
+                        # Parse MM_YYYY format from monthly triaged files
+                        try:
+                            date_str = analysis_file.stem.split(".")[0]
+                            file_date = datetime.strptime(date_str, "%m_%Y")
+                            year = file_date.year
+                            analysis_years[year] = analysis_years.get(year, 0) + 1
+                        except (ValueError, IndexError):
+                            continue
+            except ValueError:
+                pass  # No primary directory configured
     except FileNotFoundError:
         # If monthly directory/folder doesn't exist yet, no annual analyses needed
         return []

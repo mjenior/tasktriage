@@ -26,10 +26,6 @@ GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
 # If set, analysis files will be saved here instead of uploading to Google Drive
 LOCAL_OUTPUT_DIR = os.getenv("LOCAL_OUTPUT_DIR")
 
-# Backward compatibility: support old USB_DIR variable name
-if not EXTERNAL_INPUT_DIR and os.getenv("USB_DIR"):
-    EXTERNAL_INPUT_DIR = os.getenv("USB_DIR")
-
 # Validate that at least one source is configured
 if not EXTERNAL_INPUT_DIR and not LOCAL_INPUT_DIR and not (GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET and GOOGLE_DRIVE_FOLDER_ID):
     raise ValueError(

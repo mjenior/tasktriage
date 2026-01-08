@@ -253,7 +253,7 @@ def list_raw_notes(notes_dir: Path) -> list[tuple[Path, str]]:
             continue
         if f.is_file() and f.suffix.lower() in valid_extensions:
             # Skip analysis files and raw notes files
-            if "_analysis.txt" in f.name or ".raw_notes.txt" in f.name:
+            if ".triaged.txt" in f.name or ".raw_notes.txt" in f.name:
                 continue
             dt = parse_filename_datetime(f.name)
             display_name = format_file_datetime(dt, f.name)
@@ -269,10 +269,7 @@ def list_analysis_files(notes_dir: Path) -> list[tuple[Path, str]]:
     files = []
 
     analysis_suffixes = [
-        ".daily_analysis.txt",
-        ".weekly_analysis.txt",
-        ".monthly_analysis.txt",
-        ".annual_analysis.txt",
+        ".triaged.txt",  # All analyses now use "triaged" naming
     ]
 
     for subdir in ["daily", "weekly", "monthly", "annual"]:
@@ -284,14 +281,60 @@ def list_analysis_files(notes_dir: Path) -> list[tuple[Path, str]]:
             if f.is_file():
                 for suffix in analysis_suffixes:
                     if f.name.endswith(suffix):
-                        dt = parse_filename_datetime(f.name)
-                        analysis_type = suffix.replace("_analysis.txt", "").replace(".", "")
-                        display_name = f"[{analysis_type.upper()}] {format_file_datetime(dt, f.name)}"
+                        # Parse date format based on parent directory (analysis type)
+                        date_str = f.stem.split(".")[0]
+                        try:
+                            if subdir == "weekly":
+                                # weekX_MM_YYYY format for weekly (e.g., week1_12_2025)
+                                # Just parse month/year for sorting, ignore week number
+                                parts = date_str.split("_")
+                                if len(parts) == 3 and parts[0].startswith("week"):
+                                    dt = datetime.strptime(f"{parts[1]}_{parts[2]}", "%m_%Y")
+                                else:
+                                    dt = parse_filename_datetime(f.name)
+                            elif subdir == "monthly":
+                                # MM_YYYY format for monthly
+                                dt = datetime.strptime(date_str, "%m_%Y")
+                            elif subdir == "annual":
+                                # YYYY format for annual
+                                dt = datetime.strptime(date_str, "%Y")
+                            else:
+                                # DD_MM_YYYY format for daily
+                                dt = datetime.strptime(date_str, "%d_%m_%Y")
+                        except ValueError:
+                            # Fallback to original parser
+                            dt = parse_filename_datetime(f.name)
+
+                        # Determine analysis type from parent directory
+                        analysis_type = dir_path.name.upper()  # daily, weekly, monthly, annual
+                        display_name = f"[{analysis_type}] {format_file_datetime(dt, f.name)}"
                         files.append((f, display_name))
                         break
 
     # Sort by datetime descending
-    files.sort(key=lambda x: parse_filename_datetime(x[0].name) or datetime.min, reverse=True)
+    def get_sort_date(item):
+        f = item[0]
+        parent_dir = f.parent.name
+        # Parse date format based on parent directory for triaged files
+        if ".triaged.txt" in f.name:
+            try:
+                date_str = f.stem.split(".")[0]
+                if parent_dir == "weekly":
+                    # weekX_MM_YYYY format - parse month/year for sorting
+                    parts = date_str.split("_")
+                    if len(parts) == 3 and parts[0].startswith("week"):
+                        return datetime.strptime(f"{parts[1]}_{parts[2]}", "%m_%Y")
+                elif parent_dir == "monthly":
+                    return datetime.strptime(date_str, "%m_%Y")
+                elif parent_dir == "annual":
+                    return datetime.strptime(date_str, "%Y")
+                else:  # daily
+                    return datetime.strptime(date_str, "%d_%m_%Y")
+            except ValueError:
+                pass
+        return parse_filename_datetime(f.name) or datetime.min
+
+    files.sort(key=get_sort_date, reverse=True)
     return files
 
 
@@ -628,7 +671,7 @@ def sync_files_across_directories(output_dir: Path, progress_callback=None) -> d
                 continue
 
             # Skip analysis files and raw_notes files (we want original sources)
-            if "_analysis.txt" in file_path.name or ".raw_notes.txt" in file_path.name:
+            if ".triaged.txt" in file_path.name or ".raw_notes.txt" in file_path.name:
                 continue
 
             # Skip if we've already copied a file with this name
@@ -673,11 +716,8 @@ def sync_files_across_directories(output_dir: Path, progress_callback=None) -> d
     for subdir in ["daily", "weekly", "monthly", "annual"]:
         subdir_path = output_dir / subdir
         if subdir_path.exists():
-            # Get analysis files
-            files_from_output.extend(subdir_path.glob("*.daily_analysis.txt"))
-            files_from_output.extend(subdir_path.glob("*.weekly_analysis.txt"))
-            files_from_output.extend(subdir_path.glob("*.monthly_analysis.txt"))
-            files_from_output.extend(subdir_path.glob("*.annual_analysis.txt"))
+            # Get analysis files (all now use triaged naming)
+            files_from_output.extend(subdir_path.glob("*.triaged.txt"))
             # Get raw notes files from subdirs
             files_from_output.extend(subdir_path.glob("*.raw_notes.txt"))
 
@@ -1005,7 +1045,7 @@ def main():
 
             external_input_dir = st.text_input(
                 "EXTERNAL_INPUT_DIR",
-                value=env_config.get("EXTERNAL_INPUT_DIR", env_config.get("USB_DIR", "")),  # Backward compat
+                value=env_config.get("EXTERNAL_INPUT_DIR", ""),
                 help="Path to USB/mounted device notes directory"
             )
 

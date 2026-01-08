@@ -362,9 +362,9 @@ class TestParseFilenameDatetime:
         """Should parse datetime from analysis filename."""
         from tasktriage.gdrive import parse_filename_datetime
 
-        result = parse_filename_datetime("20251229_080000.daily_analysis.txt")
+        result = parse_filename_datetime("29_12_2025.triaged.txt")
 
-        assert result == datetime(2025, 12, 29, 8, 0, 0)
+        assert result == datetime(2025, 12, 29, 0, 0, 0)
 
     def test_parses_page_identifier_filename(self):
         """Should parse datetime from filename with page identifier."""
@@ -434,7 +434,7 @@ class TestExtractTimestampFromFilename:
         """Should extract timestamp from analysis filename."""
         from tasktriage.gdrive import extract_timestamp_from_filename
 
-        result = extract_timestamp_from_filename("20251225_073454.daily_analysis.txt")
+        result = extract_timestamp_from_filename("20251225_073454.triaged.txt")
         assert result == "20251225_073454"
 
     def test_returns_none_for_invalid_filename(self):

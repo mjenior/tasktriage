@@ -29,7 +29,7 @@ class TestMainFunction:
                 ("Task notes content", notes_path, datetime(2025, 12, 31, 14, 30, 0))
             ]
             mock_analyze.return_value = "Analysis result"
-            mock_save.return_value = temp_dir / "daily" / "20251231_143000.daily_analysis.txt"
+            mock_save.return_value = temp_dir / "daily" / "31_12_2025.triaged.txt"
             mock_source.return_value = "usb"
 
             yield {

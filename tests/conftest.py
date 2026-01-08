@@ -73,8 +73,8 @@ def sample_image_file(mock_usb_dir):
 def sample_analysis_file(mock_usb_dir):
     """Create a sample daily analysis file in the daily subdirectory."""
     daily_dir = mock_usb_dir / "daily"
-    analysis_path = daily_dir / "20251229_080000.daily_analysis.txt"
-    analysis_content = """Daily Task Analysis
+    analysis_path = daily_dir / "29_12_2025.triaged.txt"
+    analysis_content = """Triaged Tasks
 ========================================
 
 # Daily Execution Order
@@ -97,10 +97,10 @@ Tasks were well-defined and achievable.
 @pytest.fixture
 def mock_env_vars(temp_dir, monkeypatch):
     """Set up mock environment variables for testing."""
-    monkeypatch.setenv("USB_DIR", str(temp_dir))
+    monkeypatch.setenv("EXTERNAL_INPUT_DIR", str(temp_dir))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-api-key-12345")
     return {
-        "USB_DIR": str(temp_dir),
+        "EXTERNAL_INPUT_DIR": str(temp_dir),
         "ANTHROPIC_API_KEY": "test-api-key-12345",
     }
 
