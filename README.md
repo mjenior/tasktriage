@@ -2,7 +2,7 @@
 
 TaskTriage - ethically sourced optimism for your productivity.
 
-You know that feeling when you write a great handwritten to-do list and then... don't know what to do first, or worse don't actually do any of it? This CLI tool uses Claude AI to turn your handwritten task notes into realistic, actionable execution plans based on GTD principles. Think of it as a reality check for your optimistic planning habits.
+You know that feeling when you write a great handwritten to-do list and then... don't know what to do first, or worse don't actually do any of it? This CLI tool uses Claude AI to analyze your handwritten task notes and reveal what actually got done (and why) based on GTD principles. Think of it as a reality check for your optimistic planning habits.
 
 <div align="center">
   <img src="./.images/logo.png" alt="TaskTriage Logo" width="50%">
@@ -12,8 +12,8 @@ You know that feeling when you write a great handwritten to-do list and then... 
 
 You might have this feeling too: You write a semi-disorganized list(s) of daily tasks by hand or in some digital format to keep you on track everyday. For extra safety, maybe those notes get synced to either a mounted drive or Google Drive, but that's kind of where it ends. You end up maybe just prioritizing wrong and then have a pile of old notebooks with important information on a shelf collecting dust. Well, TaskTriage is here to then swoop in, find your latest scribbles, and uses Claude AI (via LangChain) to do four things:
 
-- **Daily Analysis**: Takes your categorized to-do list and transforms it into an actual realistic plan for a single day. You get time estimates, energy levels, and prioritized action steps. No more pretending you can do 47 things in one afternoon.
-- **Weekly Analysis**: Looks back at your week's worth of daily plans to spot patterns, figure out where things went sideways, and generate strategies to fix your planning approach. It's like a retrospective, but with less corporate speak.
+- **Daily Analysis**: Analyzes your end-of-day task list to assess what you actually completed, abandoned, or left incomplete. You get insights into execution patterns, priority alignment, energy management, and workload realism. No more wondering why those 47 things didn't get done.
+- **Weekly Analysis**: Looks back at your week's worth of daily analyses to spot patterns, figure out where things went sideways, and generate strategies to fix your planning approach. It's like a retrospective, but with less corporate speak.
 - **Monthly Analysis**: Synthesizes your entire month's worth of weekly analyses to identify long-term patterns, assess strategic accomplishments, and craft high-level guidance for next month's planning and execution strategy.
 - **Annual Analysis**: Analyzes all 12 months of strategic insights to identify year-long accomplishments, skill development, and high-impact opportunities for the year ahead.
 
@@ -26,7 +26,7 @@ You might have this feeling too: You write a semi-disorganized list(s) of daily 
 - **Smart re-analysis**: Detects when notes files are edited after their initial analysis and automatically includes them for re-analysis, replacing old analyses
 - Works with local/USB directories or Google Drive (your choice)
 - Tweak Claude's model parameters via a simple YAML file
-- GTD-based prioritization with built-in workload guardrails that cap you at 6-7 hours of focused work per day (because burnout is bad, actually)
+- GTD-based execution analysis with workload realism checks against healthy limits of 6-7 hours of focused work per day (because burnout is bad, actually)
 - **Temporal hierarchy**: Daily analyses are on-demand; Weekly → Monthly → Annual analyses auto-trigger when conditions are met
 - Auto-triggers weekly analyses when you have 5+ weekday analyses or when the work week has passed
 - Auto-triggers monthly analyses when you have 4+ weekly analyses or when the calendar month has ended
@@ -572,12 +572,12 @@ When triggered:
 
 The daily analysis gives you:
 
-- **Prioritized task list** in order: starred work → starred home → unstarred work → unstarred home (because that's probably what you actually care about)
-- **Action steps**: Each task gets broken into 2-3 concrete, sequential steps so you know where to start
-- **Time estimates** and **energy levels** (Low/Medium/High) for each task
-- **Task splitting** for oversized items—splits them into [Today Portion] and [Later Portion] so you're not lying to yourself
-- **Workload guardrails** that keep your total focused work at 6-7 hours (not the 14 you originally planned)
-- **Critical assessment** that calls out when your task descriptions are vague or your planning patterns are problematic
+- **Completion Summary**: Clear breakdown of what was completed (✓), abandoned (✗), and left incomplete, with analysis of why each outcome occurred
+- **Execution Patterns**: 3-5 concrete observations about which types of tasks succeed vs. fail, when your energy is highest, and what gets deferred
+- **Priority Alignment Assessment**: Honest evaluation of whether urgent tasks were truly urgent, and what your completion patterns reveal about actual priorities vs. stated priorities
+- **Workload Realism Evaluation**: Assessment of whether your planned workload was achievable, how accurate your time estimates were, and whether you stayed within healthy limits (6-7 hours focused work)
+- **Task Design Quality**: Analysis of how task clarity, scope, and actionability influenced execution—identifying which tasks were well-designed vs. poorly-designed
+- **Key Takeaways**: 3-5 specific, actionable recommendations for improving future planning based on today's execution patterns
 
 ## Weekly Analysis Output
 

@@ -6,6 +6,7 @@ Supports both local USB directory and Google Drive as sources.
 """
 
 from datetime import datetime, timedelta
+from babel.dates import format_datetime
 from pathlib import Path
 
 from .config import get_active_source, get_all_input_directories, get_primary_input_directory
@@ -66,6 +67,13 @@ def _extract_timestamp(filename: str) -> str | None:
     return None
 
 
+def generate_timestamp():
+    """
+    More LLM interpretable date format
+    Ex. "Monday, January 14, 2026, 4:04 AM
+    """
+    timestamp= datetime.now()
+    return format_datetime(timestamp, locale='en_US')
 
 
 # =============================================================================
