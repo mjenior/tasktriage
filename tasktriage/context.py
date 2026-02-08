@@ -21,7 +21,7 @@ from .config import (
     load_model_config,
     DEFAULT_MODEL,
 )
-from .prompts import get_context_summary_prompt
+from .prompts import get_context_summary_prompt, METADATA_EXTRACTION_PROMPT
 
 # Extensions to include when collecting files
 INCLUDED_EXTENSIONS = {
@@ -429,9 +429,20 @@ def _save_manifest(
     files: list[tuple[Path, str]],
     file_mtimes: dict[str, float],
     files_omitted: list[Path],
+    metadata: dict | None = None,
     context_dir: Path | None = None,
 ) -> Path:
-    """Save the context metadata manifest."""
+    """Save the context metadata manifest.
+
+    Args:
+        label: Project label
+        source_path: Path to source directory
+        files: Collected files
+        file_mtimes: File modification times
+        files_omitted: Omitted file paths
+        metadata: Structured metadata for task matching (optional)
+        context_dir: Override context directory
+    """
     if context_dir is None:
         context_dir = LOCAL_CONTEXT_DIR
 
@@ -444,6 +455,9 @@ def _save_manifest(
         "files_omitted": len(files_omitted),
         "file_mtimes": file_mtimes,
     }
+
+    if metadata:
+        meta["metadata"] = metadata
 
     meta_path = _get_meta_path(label, context_dir)
     meta_path.write_text(json.dumps(meta, indent=2))
@@ -473,6 +487,52 @@ def _save_summary(
     summary_path = _get_summary_path(label, context_dir)
     summary_path.write_text(header + summary)
     return summary_path
+
+
+def _extract_metadata(summary: str, api_key: str | None = None) -> dict:
+    """Extract structured metadata from a context summary for task matching.
+
+    Args:
+        summary: The context summary text.
+        api_key: Optional Anthropic API key.
+
+    Returns:
+        Dictionary with keys: primary_keywords, technologies, common_task_terms, related_concepts
+    """
+    from langchain_core.prompts import ChatPromptTemplate
+
+    config = load_model_config()
+    model = config.pop("model", DEFAULT_MODEL)
+    config.pop("notes_source", None)
+
+    # Use Haiku for metadata extraction (cheaper/faster)
+    llm = ChatAnthropic(
+        model="claude-haiku-4-5-20241022",
+        api_key=fetch_api_key(api_key),
+        **config,
+    )
+
+    prompt = ChatPromptTemplate.from_template(METADATA_EXTRACTION_PROMPT)
+    chain = prompt | llm
+    response = chain.invoke({"context_summary": summary})
+
+    # Parse JSON response
+    try:
+        metadata = json.loads(response.content)
+        # Validate structure
+        required_keys = {"primary_keywords", "technologies", "common_task_terms", "related_concepts"}
+        if not all(k in metadata for k in required_keys):
+            raise ValueError(f"Missing required keys in metadata")
+        return metadata
+    except (json.JSONDecodeError, ValueError) as e:
+        # Fallback to empty metadata on parse failure
+        print(f"Warning: Failed to parse metadata: {e}")
+        return {
+            "primary_keywords": [],
+            "technologies": [],
+            "common_task_terms": [],
+            "related_concepts": [],
+        }
 
 
 def summarize_context(
@@ -526,13 +586,96 @@ def summarize_context(
     response = chain.invoke({"compiled_content": compiled})
     summary = response.content
 
+    # Extract structured metadata for task matching
+    metadata = _extract_metadata(summary, api_key)
+
     # Save outputs
     summary_path = _save_summary(
         label, source_path, summary, len(files), len(omitted), context_dir
     )
-    _save_manifest(label, source_path, files, file_mtimes, omitted, context_dir)
+    _save_manifest(label, source_path, files, file_mtimes, omitted, metadata, context_dir)
 
     return summary_path, True
+
+
+def select_relevant_contexts(
+    task_notes: str,
+    max_contexts: int = 3,
+    score_threshold: float = 3.0,
+    context_dir: Path | None = None,
+) -> list[tuple[str, Path, float]]:
+    """Select relevant project contexts based on task notes content.
+
+    Uses weighted keyword matching against extracted metadata to identify
+    which project contexts are most relevant to the given task notes.
+
+    Args:
+        task_notes: The daily task notes text to match against.
+        max_contexts: Maximum number of contexts to return (default: 3).
+        score_threshold: Minimum score required for inclusion (default: 3.0).
+        context_dir: Override for context directory (default: LOCAL_CONTEXT_DIR).
+
+    Returns:
+        List of (label, summary_path, score) tuples, sorted by score descending.
+        Empty list if no contexts match above threshold.
+    """
+    if context_dir is None:
+        context_dir = LOCAL_CONTEXT_DIR
+
+    if not context_dir.exists():
+        return []
+
+    # Load all context metadata files
+    scores = {}
+    task_lower = task_notes.lower()
+
+    for meta_path in context_dir.glob("*.context.meta.json"):
+        try:
+            meta = json.loads(meta_path.read_text())
+            label = meta.get("label")
+            metadata = meta.get("metadata", {})
+
+            if not label or not metadata:
+                continue
+
+            # Weighted scoring
+            score = 0.0
+
+            # Direct label mention (highest weight)
+            if label.lower() in task_lower:
+                score += 10.0
+
+            # Primary keywords (high weight)
+            for keyword in metadata.get("primary_keywords", []):
+                if keyword.lower() in task_lower:
+                    score += 3.0
+
+            # Technologies (medium-high weight)
+            for tech in metadata.get("technologies", []):
+                if tech.lower() in task_lower:
+                    score += 2.5
+
+            # Common task terms (medium weight)
+            for term in metadata.get("common_task_terms", []):
+                if term.lower() in task_lower:
+                    score += 2.0
+
+            # Related concepts (lower weight)
+            for concept in metadata.get("related_concepts", []):
+                if concept.lower() in task_lower:
+                    score += 1.0
+
+            if score >= score_threshold:
+                summary_path = _get_summary_path(label, context_dir)
+                if summary_path.exists():
+                    scores[label] = (summary_path, score)
+
+        except (json.JSONDecodeError, OSError, KeyError):
+            continue
+
+    # Sort by score descending and limit
+    sorted_contexts = sorted(scores.items(), key=lambda x: x[1][1], reverse=True)
+    return [(label, path, score) for label, (path, score) in sorted_contexts[:max_contexts]]
 
 
 def summarize_all_contexts(

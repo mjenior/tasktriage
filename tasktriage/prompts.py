@@ -895,6 +895,28 @@ Analyze the following project directory and produce a structured codebase summar
 {compiled_content}"""
 
 
+METADATA_EXTRACTION_PROMPT = """\
+Extract structured metadata from the following codebase summary to enable task-to-project matching.
+
+Return ONLY a valid JSON object with these exact keys (no additional text):
+
+{{
+  "primary_keywords": ["keyword1", "keyword2"],
+  "technologies": ["tech1", "tech2"],
+  "common_task_terms": ["term1", "term2"],
+  "related_concepts": ["concept1", "concept2"]
+}}
+
+Guidelines:
+- primary_keywords: 5-10 most distinctive/unique terms that identify this project (avoid generic terms like "code", "project", "application")
+- technologies: Specific technologies, frameworks, languages used (e.g., "python", "fastapi", "postgresql", "docker")
+- common_task_terms: Terms likely to appear in daily tasks related to this project (e.g., "auth", "api", "deployment", "migration", "frontend")
+- related_concepts: Synonyms and related terms that might not appear in the summary but relate to the work (e.g., if "OAuth 2.0" appears, include "authentication", "login", "authorization")
+
+Codebase summary:
+{context_summary}"""
+
+
 def get_context_summary_prompt() -> ChatPromptTemplate:
     """Get the context summarization prompt template.
 

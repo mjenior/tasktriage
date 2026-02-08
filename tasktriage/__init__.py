@@ -49,6 +49,7 @@ from .prompts import (
     IMAGE_EXTRACTION_PROMPT,
     CONTEXT_SUMMARY_SYSTEM_PROMPT,
     CONTEXT_SUMMARY_HUMAN_PROMPT,
+    METADATA_EXTRACTION_PROMPT,
 )
 
 # Image processing
@@ -87,6 +88,7 @@ from .context import (
     needs_resummarization,
     summarize_context,
     summarize_all_contexts,
+    select_relevant_contexts,
 )
 
 # Core analysis
@@ -137,6 +139,7 @@ __all__ = [
     "needs_resummarization",
     "summarize_context",
     "summarize_all_contexts",
+    "select_relevant_contexts",
     # Prompt templates
     "get_daily_prompt",
     "get_weekly_prompt",
@@ -154,6 +157,7 @@ __all__ = [
     "IMAGE_EXTRACTION_PROMPT",
     "CONTEXT_SUMMARY_SYSTEM_PROMPT",
     "CONTEXT_SUMMARY_HUMAN_PROMPT",
+    "METADATA_EXTRACTION_PROMPT",
     # Constants
     "IMAGE_EXTENSIONS",
     "PDF_EXTENSIONS",

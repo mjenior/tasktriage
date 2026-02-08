@@ -16,6 +16,7 @@ You might have this feeling too: You write a semi-disorganized list(s) of daily 
 - **Weekly Analysis**: Looks back at your week's worth of daily analyses to spot patterns, figure out where things went sideways, and generate strategies to fix your planning approach. It's like a retrospective, but with less corporate speak.
 - **Monthly Analysis**: Synthesizes your entire month's worth of weekly analyses to identify long-term patterns, assess strategic accomplishments, and craft high-level guidance for next month's planning and execution strategy.
 - **Annual Analysis**: Analyzes all 12 months of strategic insights to identify year-long accomplishments, skill development, and high-impact opportunities for the year ahead.
+- **Project Context Summarization**: Automatically generates structured summaries of your project codebases to enrich task analyses with contextual knowledge about what you're actually working on.
 
 ## Features
 
@@ -31,6 +32,8 @@ You might have this feeling too: You write a semi-disorganized list(s) of daily 
 - Auto-triggers weekly analyses when you have 5+ weekday analyses or when the work week has passed
 - Auto-triggers monthly analyses when you have 4+ weekly analyses or when the calendar month has ended
 - Auto-triggers annual analyses when you have 12 monthly analyses or when the calendar year has ended with at least 1 monthly analysis
+- **Project Context Collection**: Reads directory paths from `task_context.md`, collects file contents from your project directories, and generates structured codebase summaries using Claude
+- **Smart Change Detection**: Only re-summarizes project directories when file contents actually change (mtime-based tracking)
 - Shell alias so you can just type `triage` instead of the full command
 - **Web Interface**: A Streamlit UI for browsing, editing, creating, and triaging your notes visually
 
@@ -420,6 +423,11 @@ triage
 # Specify file type preference (defaults to png)
 tasktriage --files txt
 tasktriage --files png
+
+# Context summarization flags
+tasktriage --context              # Summarize projects before task analysis
+tasktriage --context-only         # Only summarize projects, skip task analysis
+tasktriage --force-context        # Force re-summarization even if unchanged
 ```
 
 ### Web Interface
@@ -607,6 +615,104 @@ Example:
 ```
 
 This marks "finish ECN bot fixes" as critical/urgent.
+
+## Project Context Summarization
+
+TaskTriage can automatically summarize your project codebases to provide contextual knowledge about what you're working on. This enriches task analyses by helping Claude understand the technical landscape behind your tasks.
+
+### How It Works
+
+1. **Create `task_context.md`** in your TaskTriage repository root:
+
+```markdown
+# Project context paths (one per line)
+# Comments start with #
+
+# Auto-labeled by directory name
+/home/user/repos/my-api
+~/repos/frontend-app
+
+# Or provide custom labels
+backend: /home/user/repos/api-service
+frontend: ~/repos/react-app
+```
+
+2. **Run context summarization**:
+
+```bash
+# Summarize all projects before normal analysis
+tasktriage --context
+
+# Only summarize projects, skip task analysis
+tasktriage --context-only
+
+# Force re-summarization even if unchanged
+tasktriage --force-context
+```
+
+3. **Summaries are saved to `local_context/`**:
+
+```
+local_context/
+├── my-api.context.md              # Human-readable summary
+├── my-api.context.meta.json       # Change detection metadata
+├── frontend-app.context.md
+└── frontend-app.context.meta.json
+```
+
+### What Gets Summarized
+
+For each project directory, TaskTriage:
+
+- **Collects files** matching curated extensions (`.py`, `.js`, `.ts`, `.go`, `.md`, `.yaml`, `.json`, etc.) and known extensionless files (`Makefile`, `Dockerfile`, etc.)
+- **Excludes** common directories (`.git`, `node_modules`, `venv`, `dist`, `build`, etc.)
+- **Skips** large files (>100KB) and binary files
+- **Prioritizes** important files (READMEs first, then config/build files, then source by depth)
+- **Compiles** into a directory tree + file contents (up to 150K chars / ~37.5K tokens)
+- **Summarizes** using Claude to produce structured analysis
+
+### Summary Format
+
+Each summary includes:
+
+- **Purpose and Overview** - What the project does, who it's for, and the problem it solves
+- **Technology Stack** - Languages, frameworks, runtime versions, and key libraries
+- **Architecture Overview** - High-level components, how they interact, data flow
+- **Key Patterns and Conventions** - Coding style, naming conventions, design patterns
+- **Important Files and Entry Points** - Where to start reading, CLI/API entry points, config files
+- **External Dependencies** - Services, APIs, databases, third-party integrations
+- **Current State and Notable Concerns** - Technical debt, incomplete features, known issues
+
+### Change Detection
+
+TaskTriage tracks file modification times in `.context.meta.json` sidecar files and only re-summarizes when:
+
+- No summary exists yet
+- Files were added, removed, or modified
+- You use `--force-context` to force re-summarization
+
+This keeps costs low by avoiding redundant API calls when projects haven't changed.
+
+### Configuration
+
+**File collection rules** (in `context.py`):
+
+- **Included extensions**: `.py`, `.js`, `.ts`, `.go`, `.rs`, `.rb`, `.java`, `.md`, `.yaml`, `.json`, `.toml`, `.html`, `.css`, and many more
+- **Known extensionless files**: `Makefile`, `Dockerfile`, `.gitignore`, `.env.example`, etc.
+- **Excluded directories**: `.git`, `__pycache__`, `node_modules`, `venv`, `dist`, `build`, etc.
+- **File size limit**: 100KB per file
+- **Character budget**: 150,000 characters (~37.5K tokens) per project
+
+**Labels** are sanitized for filesystem safety (path separators, traversal sequences, and unsafe characters are replaced with hyphens).
+
+**Note**: Both `task_context.md` and `local_context/` are gitignored by default since they contain project-specific paths and generated summaries.
+
+### Use Cases
+
+- **Enrich task context**: When tasks reference specific projects, summaries provide technical context
+- **Onboarding documentation**: Quickly understand unfamiliar codebases
+- **Cross-project awareness**: Maintain awareness of multiple active projects
+- **Planning accuracy**: Better task scoping when you understand project architecture
 
 ## Daily Analysis Output
 
@@ -798,6 +904,7 @@ tasktriage/
 │   ├── image.py       # Image text extraction
 │   ├── files.py       # File I/O operations (External + Google Drive)
 │   ├── gdrive.py      # Google Drive API integration
+│   ├── context.py     # Project context collection and summarization
 │   ├── analysis.py    # Core analysis functionality
 │   └── cli.py         # Command-line interface
 └── tests/             # Test suite
@@ -822,6 +929,7 @@ from tasktriage import (
     get_weekly_prompt,
     get_monthly_prompt,
     get_annual_prompt,
+    get_context_summary_prompt,
     load_all_unanalyzed_task_notes,
     collect_weekly_analyses_for_week,
     collect_monthly_analyses_for_month,
@@ -830,6 +938,15 @@ from tasktriage import (
     extract_text_from_pdf,
     GoogleDriveClient,
     get_active_source,
+    # Context summarization
+    parse_context_file,
+    collect_files,
+    compile_content,
+    needs_resummarization,
+    summarize_context,
+    summarize_all_contexts,
+    CONTEXT_FILE_PATH,
+    LOCAL_CONTEXT_DIR,
 )
 
 # Check which source is being used for output
@@ -861,6 +978,42 @@ monthly_content, output_path, ms, me = collect_monthly_analyses_for_month(month_
 
 # Collect annual analyses for a specific year
 annual_content, output_path, year = collect_annual_analyses_for_year(2025)
+
+# Context summarization
+from pathlib import Path
+
+# Parse task_context.md to get project directories
+entries = parse_context_file()  # Returns [(label, Path), ...]
+for label, project_path in entries:
+    print(f"Found project: {label} at {project_path}")
+
+# Collect files from a project directory
+project_files = collect_files(Path("/home/user/repos/my-api"))
+# Returns [(relative_path, content), ...] sorted by path
+
+# Compile files into LLM-ready format with token budget
+compiled, omitted = compile_content(project_files, max_chars=150_000)
+# Returns (compiled_content, list_of_omitted_paths)
+
+# Check if a project needs re-summarization (mtime-based change detection)
+needs_update = needs_resummarization("my-api", Path("/home/user/repos/my-api"))
+print(f"Needs update: {needs_update}")
+
+# Summarize a single project
+summary_path, was_summarized = summarize_context(
+    "my-api",
+    Path("/home/user/repos/my-api"),
+    force=False  # Set to True to force re-summarization
+)
+print(f"Summary: {summary_path}, Updated: {was_summarized}")
+
+# Summarize all projects from task_context.md
+results = summarize_all_contexts(force=False)
+for label, summary_path, was_summarized in results:
+    if summary_path:
+        print(f"{label}: {'Updated' if was_summarized else 'Up to date'}")
+    else:
+        print(f"{label}: Failed")
 
 # Use the Google Drive client directly with OAuth credentials
 from tasktriage import get_oauth_credentials
