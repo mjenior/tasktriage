@@ -70,6 +70,21 @@ def main():
         choices=["png", "txt"],
         help="File type preference: png or txt (default: png)"
     )
+    parser.add_argument(
+        "--context",
+        action="store_true",
+        help="Run context summarization before normal task analysis"
+    )
+    parser.add_argument(
+        "--context-only",
+        action="store_true",
+        help="Only run context summarization, skip task analysis"
+    )
+    parser.add_argument(
+        "--force-context",
+        action="store_true",
+        help="Force re-summarization even if project directories are unchanged"
+    )
     args = parser.parse_args()
 
     try:
@@ -77,6 +92,50 @@ def main():
         source = get_active_source()
         source_label = "Google Drive" if source == "gdrive" else "USB/Local"
         print(f"Using notes source: {source_label}\n")
+
+        # =================================================================
+        # CONTEXT SUMMARIZATION (if requested)
+        # =================================================================
+        if args.context or args.context_only or args.force_context:
+            from .context import summarize_all_contexts, parse_context_file
+            from .config import CONTEXT_FILE_PATH
+
+            ctx_failed = 0
+
+            entries = parse_context_file()
+            if not entries:
+                print(f"No valid entries found in {CONTEXT_FILE_PATH}")
+                print("  (Create task_context.md with one directory path per line)\n")
+            else:
+                print(f"{'='*50}")
+                print(f"Context Summarization")
+                print(f"  ({len(entries)} project(s) from task_context.md)")
+                print(f"{'='*50}\n")
+
+                force = args.force_context
+                results = summarize_all_contexts(force=force)
+
+                ctx_summarized = 0
+                ctx_skipped = 0
+                ctx_failed = 0
+
+                for label, summary_path, was_summarized in results:
+                    if summary_path is None:
+                        ctx_failed += 1
+                    elif was_summarized:
+                        print(f"  \u2713 Summarized: {label}")
+                        print(f"    Saved to: {summary_path}")
+                        ctx_summarized += 1
+                    else:
+                        print(f"  \u2713 Up to date: {label}")
+                        ctx_skipped += 1
+
+                print(f"\n{'='*50}")
+                print(f"Context Summary: {ctx_summarized} summarized, {ctx_skipped} up to date, {ctx_failed} failed")
+                print(f"{'='*50}\n")
+
+            if args.context_only:
+                sys.exit(1 if ctx_failed > 0 else 0)
 
         # =================================================================
         # LEVEL 1: DAILY ANALYSES

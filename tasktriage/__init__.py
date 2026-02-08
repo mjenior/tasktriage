@@ -21,6 +21,8 @@ from .config import (
     GOOGLE_OAUTH_CLIENT_SECRET,
     GOOGLE_DRIVE_FOLDER_ID,
     NOTES_SOURCE,
+    CONTEXT_FILE_PATH,
+    LOCAL_CONTEXT_DIR,
     is_usb_available,
     is_local_input_available,
     is_gdrive_available,
@@ -35,6 +37,7 @@ from .prompts import (
     get_weekly_prompt,
     get_monthly_prompt,
     get_annual_prompt,
+    get_context_summary_prompt,
     DAILY_SYSTEM_PROMPT,
     DAILY_HUMAN_PROMPT,
     WEEKLY_SYSTEM_PROMPT,
@@ -44,6 +47,8 @@ from .prompts import (
     ANNUAL_SYSTEM_PROMPT,
     ANNUAL_HUMAN_PROMPT,
     IMAGE_EXTRACTION_PROMPT,
+    CONTEXT_SUMMARY_SYSTEM_PROMPT,
+    CONTEXT_SUMMARY_HUMAN_PROMPT,
 )
 
 # Image processing
@@ -72,6 +77,16 @@ from .files import (
 from .gdrive import (
     GoogleDriveClient,
     is_gdrive_configured,
+)
+
+# Context summarization
+from .context import (
+    parse_context_file,
+    collect_files,
+    compile_content,
+    needs_resummarization,
+    summarize_context,
+    summarize_all_contexts,
 )
 
 # Core analysis
@@ -107,17 +122,27 @@ __all__ = [
     "GOOGLE_OAUTH_CLIENT_SECRET",
     "GOOGLE_DRIVE_FOLDER_ID",
     "NOTES_SOURCE",
+    "CONTEXT_FILE_PATH",
+    "LOCAL_CONTEXT_DIR",
     "is_usb_available",
     "is_local_input_available",
     "is_gdrive_available",
     "get_active_source",
     "get_all_input_directories",
     "get_primary_input_directory",
+    # Context summarization
+    "parse_context_file",
+    "collect_files",
+    "compile_content",
+    "needs_resummarization",
+    "summarize_context",
+    "summarize_all_contexts",
     # Prompt templates
     "get_daily_prompt",
     "get_weekly_prompt",
     "get_monthly_prompt",
     "get_annual_prompt",
+    "get_context_summary_prompt",
     "DAILY_SYSTEM_PROMPT",
     "DAILY_HUMAN_PROMPT",
     "WEEKLY_SYSTEM_PROMPT",
@@ -127,6 +152,8 @@ __all__ = [
     "ANNUAL_SYSTEM_PROMPT",
     "ANNUAL_HUMAN_PROMPT",
     "IMAGE_EXTRACTION_PROMPT",
+    "CONTEXT_SUMMARY_SYSTEM_PROMPT",
+    "CONTEXT_SUMMARY_HUMAN_PROMPT",
     # Constants
     "IMAGE_EXTENSIONS",
     "PDF_EXTENSIONS",

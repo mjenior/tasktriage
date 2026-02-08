@@ -13,6 +13,10 @@ from dotenv import load_dotenv
 # Load environment variables from .env file (looks in repo root)
 load_dotenv(Path(__file__).parent.parent / ".env")
 
+# Context collection paths
+CONTEXT_FILE_PATH = Path(__file__).parent.parent / "task_context.md"
+LOCAL_CONTEXT_DIR = Path(__file__).parent.parent / "local_context"
+
 # Input directories for notes (can have multiple sources)
 EXTERNAL_INPUT_DIR = os.getenv("EXTERNAL_INPUT_DIR")  # USB/mounted device directory
 LOCAL_INPUT_DIR = os.getenv("LOCAL_INPUT_DIR")  # Local hard drive directory

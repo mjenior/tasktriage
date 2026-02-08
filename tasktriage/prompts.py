@@ -853,6 +853,63 @@ Extract all text from the provided image of handwritten task notes, preserving t
 Extract all visible text from the image now, outputting each task on its own line with markers preserved in their original positions, and preserving subtask indentation.
 """
 
+CONTEXT_SUMMARY_SYSTEM_PROMPT = """\
+You are a senior software architect performing a codebase review. Your goal is to produce a structured summary that helps someone quickly understand this project's purpose, architecture, and conventions.
+
+## Output Format
+
+Produce a structured summary with these exact sections:
+
+### Purpose and Overview
+A concise description of what this project does, who it's for, and the problem it solves.
+
+### Technology Stack
+Languages, frameworks, runtime versions, and key libraries used.
+
+### Architecture Overview
+High-level architecture: major components, how they interact, data flow, and deployment model.
+
+### Key Patterns and Conventions
+Coding style, naming conventions, design patterns, file organization, and any project-specific idioms.
+
+### Important Files and Entry Points
+The most important files to understand first, entry points (CLI, API, main), and configuration files.
+
+### External Dependencies and Integrations
+External services, APIs, databases, and third-party integrations this project relies on.
+
+### Current State and Notable Concerns
+Any visible technical debt, incomplete features, known issues, or areas that warrant attention.
+
+## Quality Standards
+
+- Be specific and evidence-based, referencing actual file paths and code patterns
+- Prioritize information that helps someone navigate and contribute to the codebase
+- Keep each section focused and concise (3-8 bullet points or a short paragraph)
+- Note any unusual patterns or deviations from common conventions
+"""
+
+CONTEXT_SUMMARY_HUMAN_PROMPT = """\
+Analyze the following project directory and produce a structured codebase summary:
+
+{compiled_content}"""
+
+
+def get_context_summary_prompt() -> ChatPromptTemplate:
+    """Get the context summarization prompt template.
+
+    Variables:
+        compiled_content: The compiled file contents from the target directory
+
+    Returns:
+        ChatPromptTemplate configured for context summarization
+    """
+    return ChatPromptTemplate.from_messages([
+        ("system", CONTEXT_SUMMARY_SYSTEM_PROMPT),
+        ("human", CONTEXT_SUMMARY_HUMAN_PROMPT),
+    ])
+
+
 def get_daily_prompt() -> ChatPromptTemplate:
     """Get the daily retrospective analysis prompt template.
 
