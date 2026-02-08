@@ -75,10 +75,16 @@ source ~/.bashrc  # or ~/.zshrc if you're a zsh person
 If you really want to do it yourself:
 
 ```bash
+# Basic installation
 pip install -e .
 cp .env.template .env
 # Edit .env with your settings
+
+# Optional: Install semantic matching support (recommended)
+pip install -e ".[semantic]"
 ```
+
+The `semantic` extra installs `sentence-transformers` and `torch` for advanced context matching. See [Context Matching: Semantic vs Keyword](#context-matching-semantic-vs-keyword) for details.
 
 ## Configuration
 
@@ -692,6 +698,73 @@ TaskTriage tracks file modification times in `.context.meta.json` sidecar files 
 - You use `--force-context` to force re-summarization
 
 This keeps costs low by avoiding redundant API calls when projects haven't changed.
+
+### Context Matching: Semantic vs Keyword
+
+TaskTriage offers two methods for matching task notes to relevant project contexts:
+
+**Semantic Matching (Recommended)** uses machine learning embeddings to understand the meaning behind your tasks, not just keyword matches. It can identify relevant projects even when you use different terminology or describe work conceptually.
+
+**Keyword Matching (Fallback)** uses weighted keyword scoring based on exact text matches: project labels (10 pts), primary keywords (3 pts), technologies (2.5 pts), task terms (2 pts), and related concepts (1 pt).
+
+#### Enabling Semantic Matching
+
+Install optional dependencies:
+
+```bash
+# Install with semantic matching support
+pip install -e ".[semantic]"
+
+# Or manually install
+pip install sentence-transformers torch
+```
+
+The first time semantic matching runs, it downloads the `all-MiniLM-L6-v2` model (~80MB). This model:
+- Generates 384-dimensional embeddings
+- Runs fast on CPU (no GPU required)
+- Provides high-quality semantic understanding
+
+#### Matching Behavior
+
+TaskTriage automatically uses the best available method:
+
+- **With embeddings installed**: Uses semantic matching by default (more accurate)
+- **Without embeddings**: Falls back to keyword matching (still effective)
+- **Programmatic control**: Pass `inject_context_method` parameter:
+  - `"auto"` (default): Try semantic, fall back to keyword
+  - `"semantic"`: Use only semantic matching
+  - `"keyword"`: Use only keyword matching
+
+Example programmatic usage:
+
+```python
+from tasktriage import analyze_tasks
+
+# Force semantic matching only
+result = analyze_tasks(
+    "daily",
+    task_notes,
+    inject_context_method="semantic"
+)
+
+# Force keyword matching only
+result = analyze_tasks(
+    "daily",
+    task_notes,
+    inject_context_method="keyword"
+)
+```
+
+#### When Context Gets Injected
+
+Context injection happens automatically for **daily analyses only** (not weekly/monthly/annual). The system:
+
+1. Generates an embedding for your task notes (or extracts keywords)
+2. Compares against all project summaries in `local_context/`
+3. Selects top 2 most relevant projects (similarity ≥ 0.3 for semantic, score ≥ 3.0 for keyword)
+4. Appends project summaries to your task notes before analysis
+
+This adds ~43% more tokens per analysis (~1.44 cents per analysis with typical projects).
 
 ### Configuration
 

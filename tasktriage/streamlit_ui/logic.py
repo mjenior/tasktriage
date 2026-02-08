@@ -16,6 +16,8 @@ from tasktriage import (
     collect_monthly_analyses_for_month,
     collect_annual_analyses_for_year,
     save_analysis,
+    summarize_all_contexts,
+    parse_context_file,
 )
 from tasktriage.cli import analyze_single_file
 from tasktriage.files import (
@@ -453,6 +455,54 @@ def _sync_to_gdrive(files_from_output: list[Path], progress_callback) -> tuple[i
     return synced_count, errors
 
 
+def _update_context_summaries(progress_callback) -> tuple[int, int, list[str]]:
+    """Phase 4: Update task context summaries from task_context.md.
+
+    Args:
+        progress_callback: Function for progress updates
+
+    Returns:
+        Tuple of (total_contexts, updated_count, errors)
+    """
+    total_contexts = 0
+    updated_count = 0
+    errors = []
+
+    # Check if task_context.md exists
+    entries = parse_context_file()
+
+    if not entries:
+        if progress_callback:
+            progress_callback("No context paths configured in task_context.md")
+        return total_contexts, updated_count, errors
+
+    total_contexts = len(entries)
+
+    if progress_callback:
+        progress_callback(f"Updating {total_contexts} context summaries...")
+
+    try:
+        # Summarize all contexts (only updates changed ones)
+        results = summarize_all_contexts(force=False)
+
+        for label, summary_path, was_summarized in results:
+            if was_summarized:
+                updated_count += 1
+                if progress_callback:
+                    progress_callback(f"Updated context: {label}")
+            else:
+                if progress_callback:
+                    progress_callback(f"Context up-to-date: {label}")
+
+    except Exception as e:
+        error_msg = f"Context summarization failed: {str(e)}"
+        errors.append(error_msg)
+        if progress_callback:
+            progress_callback(f"Error updating contexts: {str(e)}")
+
+    return total_contexts, updated_count, errors
+
+
 def sync_files_across_directories(output_dir: Path, progress_callback=None) -> dict:
     """Sync files bidirectionally between output directory and all configured input directories.
 
@@ -461,15 +511,16 @@ def sync_files_across_directories(output_dir: Path, progress_callback=None) -> d
     2. Converts visual files (images, PDFs) to .raw_notes.txt using Claude API
     3. Copies analysis files and raw notes from output directory to all input directories
     4. Optionally syncs to Google Drive
+    5. Updates task context summaries from task_context.md
 
     Args:
         output_dir: The output directory where files are currently saved
         progress_callback: Optional callback function for progress updates
 
     Returns:
-        Dictionary with sync statistics: {total: int, synced: int, converted: int, errors: list}
+        Dictionary with sync statistics: {total: int, synced: int, converted: int, contexts_total: int, contexts_updated: int, errors: list}
     """
-    stats = {"total": 0, "synced": 0, "converted": 0, "errors": []}
+    stats = {"total": 0, "synced": 0, "converted": 0, "contexts_total": 0, "contexts_updated": 0, "errors": []}
 
     if not output_dir or not output_dir.exists():
         if progress_callback:
@@ -516,6 +567,12 @@ def sync_files_across_directories(output_dir: Path, progress_callback=None) -> d
     # Phase 3: Sync to Google Drive
     synced, errors = _sync_to_gdrive(files_from_output, progress_callback)
     stats["synced"] += synced
+    stats["errors"].extend(errors)
+
+    # Phase 4: Update task context summaries
+    contexts_total, contexts_updated, errors = _update_context_summaries(progress_callback)
+    stats["contexts_total"] = contexts_total
+    stats["contexts_updated"] = contexts_updated
     stats["errors"].extend(errors)
 
     stats["total"] = stats["synced"]

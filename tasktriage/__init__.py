@@ -89,6 +89,11 @@ from .context import (
     summarize_context,
     summarize_all_contexts,
     select_relevant_contexts,
+    select_relevant_contexts_semantic,
+    DEFAULT_MAX_CONTEXTS,
+    SEMANTIC_SIMILARITY_THRESHOLD,
+    KEYWORD_SCORE_THRESHOLD,
+    METADATA_EXTRACTION_MODEL,
 )
 
 # Core analysis
@@ -140,6 +145,11 @@ __all__ = [
     "summarize_context",
     "summarize_all_contexts",
     "select_relevant_contexts",
+    "select_relevant_contexts_semantic",
+    "DEFAULT_MAX_CONTEXTS",
+    "SEMANTIC_SIMILARITY_THRESHOLD",
+    "KEYWORD_SCORE_THRESHOLD",
+    "METADATA_EXTRACTION_MODEL",
     # Prompt templates
     "get_daily_prompt",
     "get_weekly_prompt",

@@ -54,6 +54,8 @@ def analyze_tasks(
     task_notes: str,
     api_key: str | None = None,
     inject_context: bool = True,
+    inject_context_method: str = "auto",
+    verbose: bool = True,
     **prompt_vars
 ) -> str:
     """Analyze task notes using Claude via LangChain.
@@ -63,6 +65,11 @@ def analyze_tasks(
         task_notes: The task notes to analyze
         api_key: Optional Anthropic API key (uses ANTHROPIC_API_KEY env var if not provided)
         inject_context: Whether to inject relevant project contexts (default: True, only for daily)
+        inject_context_method: Method for context selection (default: "auto")
+            - "auto": Try semantic matching first, fall back to keyword matching
+            - "semantic": Use only semantic matching (embeddings)
+            - "keyword": Use only keyword matching
+        verbose: Whether to print context matching messages (default: True)
         **prompt_vars: Variables to inject into the prompt template
             - For daily: current_date (str)
             - For weekly: week_start (str), week_end (str)
@@ -71,7 +78,17 @@ def analyze_tasks(
 
     Returns:
         The analysis and execution plan
+
+    Raises:
+        ValueError: If inject_context_method is not one of: "auto", "semantic", "keyword"
     """
+    # Validate inject_context_method
+    valid_methods = {"auto", "semantic", "keyword"}
+    if inject_context_method not in valid_methods:
+        raise ValueError(
+            f"Invalid inject_context_method: {inject_context_method}. "
+            f"Must be one of: {', '.join(sorted(valid_methods))}"
+        )
     config = load_model_config()
 
     # Extract model from config or use default
@@ -92,18 +109,43 @@ def analyze_tasks(
     enriched_task_notes = task_notes
     if analysis_type == "daily" and inject_context:
         try:
-            from .context import select_relevant_contexts
-            selected_contexts = select_relevant_contexts(
-                task_notes,
-                max_contexts=2,  # Limit to top 2 to control token usage
-                score_threshold=3.0
+            from .context import (
+                select_relevant_contexts,
+                select_relevant_contexts_semantic,
+                DEFAULT_MAX_CONTEXTS,
+                SEMANTIC_SIMILARITY_THRESHOLD,
+                KEYWORD_SCORE_THRESHOLD,
             )
+
+            selected_contexts = []
+
+            # Try semantic matching first (auto or semantic)
+            if inject_context_method in ("auto", "semantic"):
+                selected_contexts = select_relevant_contexts_semantic(
+                    task_notes,
+                    max_contexts=DEFAULT_MAX_CONTEXTS,
+                    score_threshold=SEMANTIC_SIMILARITY_THRESHOLD,
+                )
+                if selected_contexts and inject_context_method == "auto" and verbose:
+                    print("  Using semantic context matching")
+
+            # Fall back to keyword matching if needed (auto with no semantic results, or explicit keyword)
+            if not selected_contexts and inject_context_method in ("auto", "keyword"):
+                selected_contexts = select_relevant_contexts(
+                    task_notes,
+                    max_contexts=DEFAULT_MAX_CONTEXTS,
+                    score_threshold=KEYWORD_SCORE_THRESHOLD,
+                )
+                if selected_contexts and inject_context_method == "auto" and verbose:
+                    print("  Using keyword context matching (semantic unavailable)")
+
             if selected_contexts:
                 context_section = _build_context_section(selected_contexts)
                 enriched_task_notes = f"{task_notes}{context_section}"
         except Exception as e:
             # Context injection is optional - proceed without if it fails
-            print(f"Warning: Context injection failed: {e}")
+            if verbose:
+                print(f"Warning: Context injection failed: {e}")
 
     # Get the appropriate prompt template
     if analysis_type == "annual":

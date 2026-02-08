@@ -8,6 +8,7 @@ re-summarized when their contents change.
 """
 
 import json
+import math
 import os
 from datetime import datetime
 from pathlib import Path
@@ -63,6 +64,77 @@ MAX_FILE_SIZE = 100_000
 
 # Default character budget for compiled content
 DEFAULT_MAX_CHARS = 150_000
+
+# Context matching thresholds
+SEMANTIC_SIMILARITY_THRESHOLD = 0.3  # Minimum cosine similarity (0.0-1.0)
+KEYWORD_SCORE_THRESHOLD = 3.0  # Minimum weighted keyword score
+DEFAULT_MAX_CONTEXTS = 2  # Maximum contexts to inject
+
+# Model for metadata extraction (fast, cheap)
+METADATA_EXTRACTION_MODEL = "claude-haiku-4-5-20241022"
+
+# Embedding model configuration
+EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+
+# Try to import sentence-transformers for semantic matching
+try:
+    from sentence_transformers import SentenceTransformer
+    _EMBEDDINGS_AVAILABLE = True
+    _EMBEDDING_MODEL = None  # Lazy-loaded on first use
+    _EMBEDDING_LOAD_FAILED = False  # Track failed load attempts
+except ImportError:
+    _EMBEDDINGS_AVAILABLE = False
+    _EMBEDDING_MODEL = None
+    _EMBEDDING_LOAD_FAILED = False
+
+
+def _get_embedding_model():
+    """Get or initialize the sentence transformer model.
+
+    Uses all-MiniLM-L6-v2: fast, lightweight (80MB), 384 dimensions.
+    Model is cached after first load.
+
+    Returns:
+        SentenceTransformer model or None if unavailable
+    """
+    global _EMBEDDING_MODEL, _EMBEDDING_LOAD_FAILED
+
+    if not _EMBEDDINGS_AVAILABLE or _EMBEDDING_LOAD_FAILED:
+        return None
+
+    if _EMBEDDING_MODEL is None:
+        try:
+            _EMBEDDING_MODEL = SentenceTransformer(EMBEDDING_MODEL_NAME)
+        except Exception as e:
+            _EMBEDDING_LOAD_FAILED = True
+            print(f"Warning: Failed to load embedding model: {e}")
+            print("  Semantic context matching will be unavailable.")
+            print("  Install with: pip install -e \".[semantic]\"")
+            return None
+
+    return _EMBEDDING_MODEL
+
+
+def _generate_embedding(text: str) -> list[float] | None:
+    """Generate embedding vector for text using sentence-transformers.
+
+    Args:
+        text: Text to embed (typically a project summary)
+
+    Returns:
+        384-dimensional embedding vector as list, or None if unavailable
+    """
+    model = _get_embedding_model()
+    if model is None:
+        return None
+
+    try:
+        # Generate embedding and convert to list for JSON serialization
+        embedding = model.encode(text, convert_to_numpy=True)
+        return embedding.tolist()
+    except Exception as e:
+        print(f"Warning: Failed to generate embedding: {e}")
+        return None
 
 
 def _sanitize_label(label: str) -> str:
@@ -384,6 +456,7 @@ def needs_resummarization(
     - Any tracked file's mtime changed -> needs re-summarization
     - New files appeared matching collection criteria -> needs re-summarization
     - Previously tracked files deleted -> needs re-summarization
+    - Embedding missing but embeddings now available -> needs re-summarization
 
     Args:
         label: The project label.
@@ -405,6 +478,12 @@ def needs_resummarization(
         meta = json.loads(meta_path.read_text())
     except (json.JSONDecodeError, OSError):
         return True
+
+    # Check if embeddings are available but missing from manifest
+    # This triggers re-summarization when upgrading from Phase 1 to Phase 2
+    if _EMBEDDINGS_AVAILABLE and not _EMBEDDING_LOAD_FAILED:
+        if "embedding" not in meta:
+            return True
 
     old_mtimes = meta.get("file_mtimes", {})
 
@@ -430,6 +509,7 @@ def _save_manifest(
     file_mtimes: dict[str, float],
     files_omitted: list[Path],
     metadata: dict | None = None,
+    embedding: list[float] | None = None,
     context_dir: Path | None = None,
 ) -> Path:
     """Save the context metadata manifest.
@@ -441,6 +521,7 @@ def _save_manifest(
         file_mtimes: File modification times
         files_omitted: Omitted file paths
         metadata: Structured metadata for task matching (optional)
+        embedding: Embedding vector for semantic matching (optional)
         context_dir: Override context directory
     """
     if context_dir is None:
@@ -458,6 +539,9 @@ def _save_manifest(
 
     if metadata:
         meta["metadata"] = metadata
+
+    if embedding:
+        meta["embedding"] = embedding
 
     meta_path = _get_meta_path(label, context_dir)
     meta_path.write_text(json.dumps(meta, indent=2))
@@ -507,7 +591,7 @@ def _extract_metadata(summary: str, api_key: str | None = None) -> dict:
 
     # Use Haiku for metadata extraction (cheaper/faster)
     llm = ChatAnthropic(
-        model="claude-haiku-4-5-20241022",
+        model=METADATA_EXTRACTION_MODEL,
         api_key=fetch_api_key(api_key),
         **config,
     )
@@ -589,19 +673,22 @@ def summarize_context(
     # Extract structured metadata for task matching
     metadata = _extract_metadata(summary, api_key)
 
+    # Generate embedding for semantic matching
+    embedding = _generate_embedding(summary)
+
     # Save outputs
     summary_path = _save_summary(
         label, source_path, summary, len(files), len(omitted), context_dir
     )
-    _save_manifest(label, source_path, files, file_mtimes, omitted, metadata, context_dir)
+    _save_manifest(label, source_path, files, file_mtimes, omitted, metadata, embedding, context_dir)
 
     return summary_path, True
 
 
 def select_relevant_contexts(
     task_notes: str,
-    max_contexts: int = 3,
-    score_threshold: float = 3.0,
+    max_contexts: int = DEFAULT_MAX_CONTEXTS,
+    score_threshold: float = KEYWORD_SCORE_THRESHOLD,
     context_dir: Path | None = None,
 ) -> list[tuple[str, Path, float]]:
     """Select relevant project contexts based on task notes content.
@@ -611,8 +698,8 @@ def select_relevant_contexts(
 
     Args:
         task_notes: The daily task notes text to match against.
-        max_contexts: Maximum number of contexts to return (default: 3).
-        score_threshold: Minimum score required for inclusion (default: 3.0).
+        max_contexts: Maximum number of contexts to return (default: DEFAULT_MAX_CONTEXTS).
+        score_threshold: Minimum score required for inclusion (default: KEYWORD_SCORE_THRESHOLD).
         context_dir: Override for context directory (default: LOCAL_CONTEXT_DIR).
 
     Returns:
@@ -674,6 +761,93 @@ def select_relevant_contexts(
             continue
 
     # Sort by score descending and limit
+    sorted_contexts = sorted(scores.items(), key=lambda x: x[1][1], reverse=True)
+    return [(label, path, score) for label, (path, score) in sorted_contexts[:max_contexts]]
+
+
+def _cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
+    """Compute cosine similarity between two vectors.
+
+    Args:
+        vec1: First embedding vector
+        vec2: Second embedding vector
+
+    Returns:
+        Cosine similarity score (0.0 to 1.0)
+    """
+    # Compute dot product
+    dot_product = sum(a * b for a, b in zip(vec1, vec2))
+
+    # Compute magnitudes
+    mag1 = math.sqrt(sum(a * a for a in vec1))
+    mag2 = math.sqrt(sum(b * b for b in vec2))
+
+    # Avoid division by zero
+    if mag1 == 0 or mag2 == 0:
+        return 0.0
+
+    return dot_product / (mag1 * mag2)
+
+
+def select_relevant_contexts_semantic(
+    task_notes: str,
+    max_contexts: int = DEFAULT_MAX_CONTEXTS,
+    score_threshold: float = SEMANTIC_SIMILARITY_THRESHOLD,
+    context_dir: Path | None = None,
+) -> list[tuple[str, Path, float]]:
+    """Select relevant project contexts using semantic similarity (embeddings).
+
+    Uses sentence-transformers embeddings and cosine similarity to identify
+    which project contexts are most relevant to the given task notes.
+
+    Falls back to empty list if embeddings are not available or no embeddings
+    are stored in manifests.
+
+    Args:
+        task_notes: The daily task notes text to match against.
+        max_contexts: Maximum number of contexts to return (default: DEFAULT_MAX_CONTEXTS).
+        score_threshold: Minimum similarity score (0.0-1.0) required for inclusion (default: SEMANTIC_SIMILARITY_THRESHOLD).
+        context_dir: Override for context directory (default: LOCAL_CONTEXT_DIR).
+
+    Returns:
+        List of (label, summary_path, similarity_score) tuples, sorted by score descending.
+        Empty list if embeddings unavailable or no contexts match above threshold.
+    """
+    if context_dir is None:
+        context_dir = LOCAL_CONTEXT_DIR
+
+    if not context_dir.exists():
+        return []
+
+    # Generate embedding for task notes
+    task_embedding = _generate_embedding(task_notes)
+    if task_embedding is None:
+        return []
+
+    # Load all context embeddings and compute similarities
+    scores = {}
+
+    for meta_path in context_dir.glob("*.context.meta.json"):
+        try:
+            meta = json.loads(meta_path.read_text())
+            label = meta.get("label")
+            embedding = meta.get("embedding")
+
+            if not label or not embedding:
+                continue
+
+            # Compute cosine similarity
+            similarity = _cosine_similarity(task_embedding, embedding)
+
+            if similarity >= score_threshold:
+                summary_path = _get_summary_path(label, context_dir)
+                if summary_path.exists():
+                    scores[label] = (summary_path, similarity)
+
+        except (json.JSONDecodeError, OSError, KeyError):
+            continue
+
+    # Sort by similarity descending and limit
     sorted_contexts = sorted(scores.items(), key=lambda x: x[1][1], reverse=True)
     return [(label, path, score) for label, (path, score) in sorted_contexts[:max_contexts]]
 

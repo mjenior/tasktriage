@@ -5,6 +5,7 @@ Contains all the rendering logic for the left control panel and right editor pan
 """
 
 import os
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -100,8 +101,8 @@ def render_actions_section(notes_dir: Path | None) -> None:
             # Show results
             progress_placeholder.empty()
 
-            if stats["total"] == 0 and stats["converted"] == 0:
-                st.warning("No files to sync or convert")
+            if stats["total"] == 0 and stats["converted"] == 0 and stats["contexts_updated"] == 0:
+                st.warning("No files to sync or convert, no context updates needed")
             else:
                 # Build success message
                 parts = []
@@ -109,12 +110,16 @@ def render_actions_section(notes_dir: Path | None) -> None:
                     parts.append(f"synced {stats['synced']} files")
                 if stats["converted"] > 0:
                     parts.append(f"converted {stats['converted']} visual files")
+                if stats["contexts_updated"] > 0:
+                    parts.append(f"updated {stats['contexts_updated']}/{stats['contexts_total']} contexts")
+                elif stats["contexts_total"] > 0:
+                    parts.append(f"all {stats['contexts_total']} contexts up-to-date")
 
                 if parts:
                     msg = "✅ Sync complete! " + ", ".join(parts)
                     st.success(msg)
                 else:
-                    st.info("No new files to sync or convert")
+                    st.info("No new files to sync or convert, all contexts up-to-date")
 
                 if stats["errors"]:
                     with st.expander(f"⚠️ {len(stats['errors'])} Errors"):
